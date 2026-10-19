@@ -34,7 +34,7 @@ Test numbers refer to `design.md` §11.
 | # | Batch | Contents | Check | State |
 |---|---|---|---|---|
 | 01 | **Setup** | `README.md`, `design.md`, `plan.md`, `research.md`, `tests.md`, `.gitignore`. | | Done |
-| 02 | **Contact and one wing** | Tooth table, force-driven stroke, plectrum tip and the release law, one linear wing (frame + membrane), sub-sample event writer, Tick. Test runner. | Tests 1, 2, 3, 6, 8 · **You:** listen to the field cricket at several Escapement settings | |
+| 02 | **Contact and one wing** | Tooth table, force-driven stroke, plectrum tip and the release law, one linear wing (frame + membrane), sub-sample event writer, Tick. Test runner. A basic song clock (Rate, Chirp, Chirp rate) so the cricket can be heard. | Tests 1, 2, 3, 6, 8 · **You:** listen to the field cricket at several Escapement settings | Done: 32 tests; locks one tooth per cycle at Speed 1.2–2.9, double speed near 6 · **You:** listen to presets 01–10 |
 | 03 | **Cost** | `perf.js` at the worst case (Clockwork and Spring, high carrier, two wings, body, two limbs). Decides the step rule for stroke and tip and the Poly voice count. | Numbers in the README | |
 | 04 | **Full radiator** | Nonlinear frame, two wings with Wings detune, Glide by file position, Second mode, Body. | Tests 4 (escapement half), 5 | |
 | 05 | **Spring and macros** | Spring contact, Temperature, Size, Ultra and Time. | Tests 4, 7 · **You:** listen to the ten archetypes | |

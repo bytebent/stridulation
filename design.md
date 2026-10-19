@@ -12,8 +12,8 @@ still to decide. Sources for every number are in `research.md`.
 ## 1. What it is
 
 - **Name:** stridulation, lowercase like mouth-tube and beak-tube. [Decided]
-- **Accent colours:** brown and green. Brown is the first product colour outside the six
-  stripes. [Decided]
+- **Accent colours:** orange and green. [Decided]
+- **Plugin code:** `Strd` for now (the four-letter id DAWs use to tell plugins apart). [Decided]
 - **Scope:** every insect that stridulates: crickets, mole and tree crickets, katydids,
   grasshoppers, wetas, beetles, ants, velvet ants, bugs, stick insects and caterpillars. [Decided]
 - **The radiator is inside the instrument.** The wing resonator paces the scraper, so a separate
@@ -67,7 +67,8 @@ stroke and contact run twice, one leg per side.
   toothless file about 20,000). A force-driven wing gives this; a speed-driven one cannot.
   [Proposed]
 - **Speed** is relative: 1 is the free speed that strikes teeth at the carrier rate at mid-file.
-  [Proposed]
+  A clockwork needs a wing that would run faster than its regulator: it locks between Speed 1.2
+  and 2.9 and doubles near 6, so the default is 2. [Proposed]
 - **Curve:** muscle force through the stroke, a twitch that rises then falls. [Proposed]
 - **Arc:** share of the file one stroke uses. **Arc growth:** later pulses of a chirp use more
   file and are louder, as in *G. campestris*. [Proposed]
@@ -93,6 +94,16 @@ This follows Bennet-Clark & Bailey's (2002) phase model: impact at the low point
 swing (270°), drive through the first part of the cycle, release as the file swings up. Both
 impact and release make sound. g(y) and the engagement depth are tuned by ear and against tests
 1–3 (§11); no paper gives them as equations. [Decided]
+
+As built in batch 02 (details in `tests.md`), the escapement acts through the phase of the file's
+vibration:
+- a caught plectrum is released near the top of the swing (90°), once the file has swung back
+  down since the last release (re-arming);
+- a plectrum that meets a tooth within half a cycle of a release, while the file is still high,
+  slides over it (Koch's double speed);
+- a push beyond the escapement's hold releases at any phase;
+- the escapement's authority scales with the wing's ringing amplitude (so a stroke starts as a cog
+  rattle and tunes in) and with its Q (half at Q 5, so a wing without a harp can't regulate).
 
 | Escapement | Spring | Behaviour | Insects |
 |---|---|---|---|
@@ -197,7 +208,7 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 - Mono or Poly; the Poly voice count comes from the cost batch. [Decided]
 - Glide in Mono; Swell (attack and release on force); four LFOs as in Dolphin. [Proposed]
 - **Chorus** (many insects that synchronise or alternate) needs pulse-coupled agents, not voice
-  polyphony. In this plugin or in krill. [Open]
+  polyphony. Left out for now. [Decided]
 
 ## 9. Parameters
 
@@ -223,7 +234,7 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | Wing | `secondlevel` | −48…0 dB | −24 | |
 | Wing | `body` | 0–1 | 0 | low-Q body |
 | Wing | `bodytone` | 300 Hz–3 kHz, log | 1 kHz | high body mode at ~10× |
-| Stroke | `speed` | 0.25–4, log | 1 | 1 = matched at mid-file |
+| Stroke | `speed` | 0.01–8, log | 2 | 1 = matched at mid-file; clockwork locks at 1.2–2.9 |
 | Stroke | `curve` | 0–1 | 0.5 | muscle twitch shape |
 | Stroke | `arc` | 0.1–1 | 0.8 | share of file per stroke |
 | Stroke | `arcgrow` | 0–1 | 0.3 | |
@@ -294,6 +305,5 @@ Tests that tie it to the papers:
 
 ## 12. Open
 
-- Plugin code (the four-letter id DAWs use; Throat is `Thrt`). Proposed `Strd`.
-- Chorus here or in krill. Poly count (cost batch). Leg B. Temperature rules for katydids,
-  grasshoppers and beetles. Vendoring into krill.
+- Poly count (cost batch). Leg B. Temperature rules for katydids, grasshoppers and beetles.
+  Vendoring into krill.

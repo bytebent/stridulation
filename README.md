@@ -7,8 +7,19 @@ contact model runs from a **cog rattle**, where wing speed and tooth spacing set
 the wing sets the pitch. A softer scraper gives the stick-slip bursts of bark beetles and
 ultrasonic katydids.
 
-Status: **design**. Nothing is built yet. The reference engine and browser bench come first,
-then the C++ port and the JUCE plugin.
+Status: **prototype, batch 02 of 10**. The reference engine has the file, the force-driven
+stroke, the plectrum with its escapement and one wing: a field cricket locks one tooth per wing
+cycle, doubles its speed when overdriven, and becomes a cog rattle with Escapement at 0. Next:
+the cost batch, then the full radiator (two wings, glide, body).
+
+## Try it
+
+Needs Node 18 or newer. No packages to install.
+
+```sh
+node tests/engine-test.js        # engine tests
+node tools/render-presets.js     # test presets → renders/*.wav
+```
 
 ## Files
 
@@ -19,15 +30,20 @@ then the C++ port and the JUCE plugin.
 
 The design doc is *stridulation: design and architecture*. `design.md` is this repo's copy.
 
-## Planned layout
+## Layout
 
 - `reference/stridulation-engine.js`: the reference engine; defines the sound
-- `reference/presets.js`: test presets (bench and tests only)
+- `reference/presets.js`: test presets (renders and tests only)
+- `tests/engine-test.js`: engine tests
+- `tools/render-presets.js`: preset renders
+
+Later (see `plan.md`):
+
 - `source/StridulationDSP.h`: C++ port, real-time safe, no JUCE dependency
 - `source/PluginProcessor.*`, `source/PluginEditor.*`, `ui/index.html`: JUCE instrument and its
   web-view interface
-- `tests/`: engine tests, C++ against reference comparison, plugin wrapper test
-- `tools/`: bench (`stridulation.html`), performance and preset renders
+- `tests/`: C++ against reference comparison, plugin wrapper test
+- `tools/`: bench (`stridulation.html`), performance
 
 ## License note
 
