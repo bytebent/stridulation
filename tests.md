@@ -3,7 +3,33 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
-**Now: 32 engine tests passing** (about 2 s).
+**Now: 32 engine tests passing** (about 2 s). Benchmark: `node tools/perf.js`.
+
+## Batch 03 · cost
+
+- `tools/perf.js` (one 2.1 GHz Xeon core, 48 kHz):
+
+  | Scenario | CPU |
+  |---|---|
+  | Silent | 0.3% |
+  | 1 voice, defaults (chirps) | 2–3% |
+  | 1 voice, clockwork trill, 5 kHz | 2.6% |
+  | 1 voice, clockwork trill, 15 kHz | 2.5% |
+  | 1 voice, cog rattle, Speed 8, 15 kHz | 3.0% |
+  | 4 voices, clockwork trill | 6.3% |
+  | 8 voices, defaults | 11.1% |
+  | 8 voices, clockwork trill, high notes | 12.5% |
+
+- Where it goes: the wing integration is about a quarter of a voice (8 voices: 13.1% with it,
+  9.5% without). The rest is the contact, the song clock and the 4× decimation.
+- Projection for the full voice: three times the wing work (two nonlinear wings and a body) puts
+  8 voices at 21%; a second limb adds roughly another contact, so about 27% at the worst case.
+  Syrinx needs 40% for 4 voices.
+- RK4 step rule: one sub-step per 0.5 rad of the frame's frequency per internal sample. Free-ring
+  pitch error under 0.1 cent from 2 to 30 kHz at this rule, the same as at 0.25. Kept.
+- The stroke uses implicit Euler, stable at any step: no sub-steps. The soft plectrum of Spring
+  (batch 05) gets its own step rule there.
+- Decided: Poly has 8 voices.
 
 ## Batch 02 · contact and one wing
 
@@ -56,11 +82,11 @@ Tests:
 Notes for the listening round:
 
 - **Pitch rises with drive** when locked: +0.6% at Speed 2, +2.7% at 2.5, +7.5% at 2.9.
-  Physically right: an escapement pulls its regulator, and Sismondo puts the limit near 15%. If it
-  bothers in play, a pitch keeper like Syrinx's is an option. [Open]
+  Physically right: an escapement pulls its regulator, and Sismondo puts the limit near 15%.
+  Decided: a pitch-locked mode, off by default (batch 04).
 - **Levels follow the physics.** A locked clockwork is about 18 dB louder than a cog rattle at the
-  same carrier, and a slow scrape (Speed 0.03) sits near −52 dBFS. Whether to add loudness
-  compensation is for you to decide by ear. [Open]
+  same carrier, and a slow scrape (Speed 0.03) sits near −52 dBFS. Decided: loudness compensation
+  (batch 04).
 - Speed now runs 0.01–8 (was 0.25–4 in the design) and defaults to 2, the middle of the lock.
 
 Renders: `node tools/render-presets.js` writes the ten presets to `renders/`, each normalised to

@@ -205,14 +205,18 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | Pitch bend | wing frequency |
 
 - Keytrack on by default; Tune ±24 st; Ultra divides after. [Proposed]
-- Mono or Poly; the Poly voice count comes from the cost batch. [Decided]
+- **Pitch lock**, off by default: holds the sounding pitch on the note even where the escapement
+  pulls it sharp with drive (+0.6% at Speed 2, up to +7.5% at the edge of the lock). [Decided]
+- **Loudness compensation**: evens out the level between a locked clockwork, a cog rattle and a
+  slow scrape, which otherwise differ by up to about 50 dB. [Decided]
+- Mono or Poly; Poly has 8 voices (cost batch). [Decided]
 - Glide in Mono; Swell (attack and release on force); four LFOs as in Dolphin. [Proposed]
 - **Chorus** (many insects that synchronise or alternate) needs pulse-coupled agents, not voice
   polyphony. Left out for now. [Decided]
 
 ## 9. Parameters
 
-46 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
+48 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
 
 | Group | id | Range | Default | Notes |
 |---|---|---|---|---|
@@ -255,7 +259,9 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | World | `ultra` | ÷1–÷16 | ÷1 | |
 | World | `ultratime` | 0–1 | 0.5 | |
 | World | `keytrack` | Off, On | On | |
-| Voice | `poly` | Mono, Poly | Mono | |
+| Voice | `poly` | Mono, Poly | Mono | Poly: 8 voices [Decided] |
+| Voice | `pitchlock` | Off, On | Off | [Decided] |
+| Out | `loudness` | 0–1 | 1 | loudness compensation amount [Decided] |
 | Voice | `glidetime` | 0–2 s | 0 | Mono only |
 | Voice | `attack` | 1 ms–4 s | 5 ms | Swell, on force |
 | Voice | `release` | 1 ms–4 s | 50 ms | Swell, on force |
@@ -305,5 +311,5 @@ Tests that tie it to the papers:
 
 ## 12. Open
 
-- Poly count (cost batch). Leg B. Temperature rules for katydids, grasshoppers and beetles.
+- Leg B. Temperature rules for katydids, grasshoppers and beetles.
   Vendoring into krill.
