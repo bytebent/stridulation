@@ -3,7 +3,62 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
-**Now: 32 engine tests passing** (about 2 s). Benchmark: `node tools/perf.js`.
+**Now: 44 engine tests passing** (about 25 s). Benchmark: `node tools/perf.js`.
+
+## Batch 04 · full radiator, loudness, pitch lock
+
+Built: two wings (Sismondo's frame and membrane each, one per side with Spread), Wings detune,
+a stiffening frame (Nonlinear), Glide by plectrum position, a Second mode per wing, the Body,
+loudness compensation and Pitch lock.
+
+Findings while building:
+
+- **Two detuned wings cancel unless joined.** At ±4% either side of the note, one wing answers in
+  phase and the other nearly against it. Joining the membranes through the plectrum (strong
+  while engaged, 0.6 × w²; light when free, 0.02 × w²) gives them one shared mode, as Bennet-Clark
+  (2003) found. The detune then shows as beating in the free tail. With that coupling the lock
+  range is back to Speed 1.5–2.9, and double speed is clean at 6.
+- **Stiffening.** Sismondo's X⁵ blew up at the frame's real amplitude (|X| 1.8 locked, 5.4
+  overdriven). He notes a cubic works as well, so the frame now has a cubic spring that saturates
+  at +300% stiffness. Stable at every setting.
+- **Test 5 (n:m locks) is not reproduced yet.** Driving a cog rattle at 3/4 or 4/5 of the wing,
+  this frame (2.5 × carrier, Q 3) gives only tooth-rate harmonics. With the frame moved to
+  1.25 × carrier, Q 8, stiffening does bring strong period doubling (peaks at 1.5× and 2.5× the
+  tooth rate), one of Sismondo's behaviours. But that frame broke double speed and the gap
+  behaviour, so it was reverted. Nonlinear stays a subtle stiffening for now. [Open]
+- **Second mode and Body** are two-pole resonators normalised to unit peak gain and fed like the
+  wing, so their level holds across pitch. The Body's input is scaled by (carrier / 4.7 kHz)^0.6,
+  since the tooth impulses grow as the carrier falls.
+- **Pitch lock:** a keeper measures each release-to-release interval against the note (glided),
+  then nudges the wing's tuning and the muscle's push together (±1200 cents, 0.08 per release).
+- **Loudness compensation:** each voice learns its level while stroking (mean square, 40 ms of
+  stroking time) and aims for 0.2 RMS. It is also capped so a voice's recent peak stays under 0.6,
+  and any sample over 0.8 is pulled down at once, which matters for clicky sounds and a voice's
+  first moments. A new voice starts from the last voice's gain. Velocity then sets the level
+  explicitly.
+
+![loudness](docs/tests/04-loudness.png)
+
+Tests:
+
+- Glide −10% and −20%: locked pitch falls 9.1% and 15.6% through the stroke. ✓
+- Spread 1 puts the wings on different sides, Spread 0 is mono. ✓
+- 20% detune: 7 bumps in the free-tail envelope; matched wings: none. ✓
+- Second mode at 0 dB: +31 dB at 2.7 × carrier. ✓
+- Body: +47 dB at 1 kHz and +29 dB at 10 kHz (Ring 0.7, Body tone 1 kHz). ✓
+- Pitch lock off by default. Clockwork at Speed 2.5: 44.6 → −1.7 cents; at 2.8: 80.3 → −3.0. Cog
+  rattle at Speed 1.3: 331 → −18.5 cents (the rest is Curve's swell within the stroke). ✓
+- Loudness: six regimes spread 23.1 dB off, 5.7 dB on; peak −5.6 dBFS. ✓
+- Batch 02's contact tests run with Wings, Glide, Nonlinear and Second off, to test the contact
+  alone; the defaults still lock (0.995 of the carrier at Speed 2).
+
+Cost now (`tools/perf.js`): 1 voice 3–6%, 8 voices trilling at high notes 26.7%. That matches the
+batch 03 projection before the second limb.
+
+New presets: 11 leafcutter ant (body only), 12 field cricket with wide wings and glide, 13 a
+clockwork pushed sharp with Pitch lock on.
+
+**You:** listen to 01–13; decide whether Nonlinear's period doubling is worth a different frame.
 
 ## Batch 03 · cost
 

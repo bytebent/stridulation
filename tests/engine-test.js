@@ -11,7 +11,7 @@ function check(name, ok, detail) {
   if (ok) passed++; else failed++;
 }
 
-const SR = 48000;
+const SR = 48000, TWO_PI = 2 * Math.PI;
 function render(p, seconds, opts = {}) {
   const e = new StridulationEngine(SR, opts.seed || 1);
   if (opts.record !== false) e.rec = [];
@@ -31,7 +31,8 @@ function render(p, seconds, opts = {}) {
 const noteFor = hz => Math.round(69 + 12 * Math.log2(hz / 440));
 const tuneFor = hz => 69 + 12 * Math.log2(hz / 440) - noteFor(hz);
 // one long stroke, no song: chirp 0 at a slow rate
-const ONE = f0 => ({ keytrack: 1, tune: tuneFor(f0), _note: noteFor(f0), chirp: 0, rate: 1, jitter: 0, spacing: 0.4, teeth: 120, arc: 0.8 });
+const ONE = f0 => ({ keytrack: 1, tune: tuneFor(f0), _note: noteFor(f0), chirp: 0, rate: 1, jitter: 0, spacing: 0.4, teeth: 120, arc: 0.8,
+  wings: 0, glide: 0, nonlinear: 0, secondlevel: -48, loudness: 0 });   // the contact alone (batch 02)
 
 // the first stroke's catches and skips, and the output's frequency over its middle 40%
 function firstStroke(r, f0) {
@@ -127,6 +128,89 @@ for (const ring of [10, 25, 40]) {
   check(`6 free decay at Ring ${ring}: Q within 10%`, Math.abs(Q / ring - 1) < 0.1, 'Q ' + Q.toFixed(1) + ' over ' + n + ' cycles');
 }
 
+// ---- batch 04: the full radiator, pitch lock, loudness ----
+const relStrokes = e => {                       // release events grouped by stroke (gaps over 4 ms)
+  const r = e.rec.filter(x => x.type === 'release'), out = []; let cur = [];
+  for (let i = 0; i < r.length; i++) { if (i && r[i].t - r[i - 1].t > 0.004) { out.push(cur); cur = []; } cur.push(r[i]); }
+  if (cur.length) out.push(cur); return out;
+};
+const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n * a), Math.floor(n * b)); return (m.length - 1) / (m[m.length - 1].t - m[0].t) / f0; };
+
+// Glide: the wing is tuned by the plectrum's place on the file (Bennet-Clark 2003), so a locked
+// clockwork's pitch falls through the second half of the stroke by about Glide
+{
+  const f0 = 4700, base = Object.assign(ONE(f0), { escapement: 1, speed: 2, wings: 8, nonlinear: 0.2 });
+  for (const glide of [-10, -20]) {
+    const s = relStrokes(render(Object.assign({}, base, { glide }), 0.2).e)[0];
+    const start = rateOf(s, 0.05, 0.35, f0), end = rateOf(s, 0.85, 0.97, f0), fall = end / start - 1;
+    check(`glide ${glide}%: locked pitch falls by about that through the stroke`, Math.abs(fall * 100 - glide) < 0.35 * Math.abs(glide), 'fall ' + pct(fall));
+  }
+}
+
+// Two wings: one per side with Spread; detuned, they beat in the free tail
+{
+  const f0 = 4700, p = Object.assign(ONE(f0), { escapement: 1, speed: 2, tick: 0 });
+  const a = render(Object.assign({}, p, { wings: 8, spread: 1 }), 0.12, { record: false });
+  const b = render(Object.assign({}, p, { wings: 8, spread: 0 }), 0.12, { record: false });
+  let dLR = 0, dB = 0; for (let i = 0; i < a.L.length; i++) { dLR = Math.max(dLR, Math.abs(a.L[i] - a.R[i])); dB = Math.max(dB, Math.abs(b.L[i] - b.R[i])); }
+  check('wings: Spread 1 puts the two wings on different sides, Spread 0 is mono', dLR > 1e-3 && dB === 0);
+  // tail envelope: per-cycle peaks after the stroke; beating shows as a non-monotonic envelope
+  const tailBumps = r => {
+    const L = r.L, per = Math.round(SR / f0); let last = 0; for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > 1e-3) last = i;
+    const pk = []; for (let i = Math.floor(0.025 * SR); i + per < L.length; i += per) { let m = 0; for (let j = i; j < i + per; j++) m = Math.max(m, Math.abs(L[j])); pk.push(m); }
+    let bumps = 0; for (let k = 2; k < pk.length - 2; k++) if (pk[k] > 1e-4 && pk[k] > pk[k - 1] * 1.05 && pk[k] > pk[k + 1]) bumps++;
+    return bumps;
+  };
+  const beat = tailBumps(render(Object.assign({}, p, { wings: 20, spread: 0.5 }), 0.12, { record: false }));
+  const flat = tailBumps(render(Object.assign({}, p, { wings: 0, spread: 0.5 }), 0.12, { record: false }));
+  check('wings: detuned wings beat in the free tail, matched wings do not', beat >= 2 && flat === 0, beat + ' envelope bumps at 20% detune, ' + flat + ' at 0%');
+}
+
+// Second mode and body add energy where they should
+{
+  const f0 = 4700, p = Object.assign(ONE(f0), { escapement: 1, speed: 2, tick: 0, volume: -24 });
+  const bandDb = (L, f) => { let re = 0, im = 0; const n = L.length; for (let i = 0; i < n; i++) { const w = 0.5 - 0.5 * Math.cos(TWO_PI * i / n); re += L[i] * w * Math.cos(TWO_PI * f * i / SR); im += L[i] * w * Math.sin(TWO_PI * f * i / SR); } return 10 * Math.log10((re * re + im * im) / n / n + 1e-30); };
+  const off = render(Object.assign({}, p, { secondlevel: -48, second: 2.7 }), 0.06, { record: false }).L;
+  const on = render(Object.assign({}, p, { secondlevel: 0, second: 2.7 }), 0.06, { record: false }).L;
+  const gain = bandDb(on, 2.7 * f0) - bandDb(off, 2.7 * f0);
+  check('second mode: energy appears at Second × the carrier', gain > 10, '+' + gain.toFixed(1) + ' dB at 2.7× carrier');
+  const ant = { escapement: 0, speed: 1, ring: 0.7, bodytone: 1000, tick: 0, volume: -24 };
+  const nb = render(Object.assign(ONE(f0), ant, { body: 0 }), 0.06, { record: false }).L;
+  const wb = render(Object.assign(ONE(f0), ant, { body: 1 }), 0.06, { record: false }).L;
+  const g1 = bandDb(wb, 1000) - bandDb(nb, 1000), g10 = bandDb(wb, 10000) - bandDb(nb, 10000);
+  check('body: rings near Body tone and about 10× it (Masters et al. 1983)', g1 > 10 && g10 > 3, '+' + g1.toFixed(1) + ' dB at 1 kHz, +' + g10.toFixed(1) + ' dB at 10 kHz');
+}
+
+// Pitch lock (off by default) holds the note where the escapement pulls it sharp
+{
+  const f0 = 4700;
+  check('pitch lock is off by default', PARAMS.find(d => d.id === 'pitchlock').def === 0);
+  const cents = (p) => { const st = relStrokes(render(Object.assign(ONE(f0), { chirp: 0, rate: 8 }, p), 0.6).e); return 1200 * Math.log2(rateOf(st[Math.min(3, st.length - 1)], 0.2, 0.9, f0)); };
+  for (const speed of [2.5, 2.8]) {
+    const off = cents({ escapement: 1, speed, pitchlock: 0 }), on = cents({ escapement: 1, speed, pitchlock: 1 });
+    check(`pitch lock, clockwork at Speed ${speed}: within 5 cents`, Math.abs(on) < 5, off.toFixed(1) + ' cents off without, ' + on.toFixed(1) + ' with');
+  }
+  const off = cents({ escapement: 0, speed: 1.3, pitchlock: 0 }), on = cents({ escapement: 0, speed: 1.3, pitchlock: 1 });
+  check('pitch lock, cog rattle at Speed 1.3: within 25 cents', Math.abs(on) < 25, off.toFixed(1) + ' cents off without, ' + on.toFixed(1) + ' with');
+}
+
+// Loudness compensation evens out the level across regimes, without clipping
+{
+  const f0 = 4700, cases = [{ escapement: 1, speed: 2 }, { escapement: 0, speed: 1 }, { escapement: 0, speed: 2 }, { escapement: 1, speed: 6 },
+    { escapement: 1, ring: 0.7 }, { escapement: 0, speed: 1, ring: 0.7, body: 1 }];
+  const level = (p, amt) => {
+    const L = render(Object.assign({ keytrack: 1, tune: tuneFor(f0), _note: noteFor(f0), chirp: 4, rate: 30, chirprate: 2.5, loudness: amt }, p), 2.5, { record: false }).L;
+    let mx = 0; for (const x of L) mx = Math.max(mx, Math.abs(x));
+    let s2 = 0, n = 0; for (let i = Math.floor(L.length * 0.3); i < L.length; i++) if (Math.abs(L[i]) > mx * 1e-3) { s2 += L[i] * L[i]; n++; }
+    return { db: 10 * Math.log10(s2 / n), pk: mx };
+  };
+  const off = cases.map(p => level(p, 0)), on = cases.map(p => level(p, 1));
+  const spread = a => Math.max(...a.map(x => x.db)) - Math.min(...a.map(x => x.db));
+  const peak = Math.max(...on.map(x => x.pk));
+  check('loudness: levels within 8 dB across six regimes (were spread over 20 dB)', spread(on) < 8 && spread(off) > 20, 'spread ' + spread(off).toFixed(1) + ' dB off, ' + spread(on).toFixed(1) + ' dB on');
+  check('loudness: no clipping', peak < 0.9, 'peak ' + (20 * Math.log10(peak)).toFixed(1) + ' dBFS');
+}
+
 // 8. Same output at any buffer size; same seed, same output; another seed, another file
 {
   const p = Object.assign({}, PRESETS[6].p);       // damaged file: jitter and gaps use the seed
@@ -153,7 +237,8 @@ for (const ring of [10, 25, 40]) {
   }
   check('presets render, finite and not silent', bad.length === 0, bad.join(', '));
   bad = [];
-  for (const id of ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'escapement', 'toothtime', 'ring', 'speed', 'curve', 'arc', 'rate', 'chirp', 'chirprate', 'tune']) {
+  for (const id of ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'escapement', 'toothtime', 'ring', 'speed', 'curve', 'arc', 'rate', 'chirp', 'chirprate', 'tune',
+      'wings', 'glide', 'nonlinear', 'second', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
     const d = PARAMS.find(q => q.id === id);
     for (const v of [d.min, d.max]) for (const note of [0, 127]) {
       const r = render({ [id]: v, keytrack: 1 }, 0.4, { record: false, note });

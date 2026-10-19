@@ -147,7 +147,12 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
   the escapement.
 - **Two wings**, one per side. *Teleogryllus* free resonances 4.56 kHz (left) and 4.21 kHz (right)
   while the song is 4.8 kHz: the plectrum stiffens both up to the song (Bennet-Clark 2003).
-  **Wings** sets the free detune. One wing at 1:1 and the other at another ratio beats. [Proposed]
+  **Wings** sets the free detune. As built, the membranes are joined through the plectrum
+  (strongly while engaged, lightly when free), so they sing as one and beat in the free tail.
+  [Proposed]
+- **Stiffening:** a cubic spring that saturates, not X⁵ (Sismondo notes either works; X⁵ was
+  unstable at the frame's real amplitude). The n:m locks of test 5 aren't reproduced yet with
+  this frame. [Open]
 - **Glide** bends the wing frequency by plectrum position, not time: the anterior file end is more
   flexible, so the resonance driven there is lower, and drive amplitude rises from the posterior
   end to the middle then falls (Bennet-Clark 2003). Measured falls: 10% *G. campestris*, 10.6%

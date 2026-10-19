@@ -7,10 +7,11 @@ contact model runs from a **cog rattle**, where wing speed and tooth spacing set
 the wing sets the pitch. A softer scraper gives the stick-slip bursts of bark beetles and
 ultrasonic katydids.
 
-Status: **prototype, batch 03 of 10**. The reference engine has the file, the force-driven
-stroke, the plectrum with its escapement and one wing: a field cricket locks one tooth per wing
+Status: **prototype, batch 04 of 10**. The reference engine has the file, the force-driven
+stroke, the plectrum with its escapement, two wings joined through the plectrum, glide, a second
+mode, the body, loudness compensation and Pitch lock. A field cricket locks one tooth per wing
 cycle, doubles its speed when overdriven, and becomes a cog rattle with Escapement at 0. Next:
-the full radiator (two wings, glide, body), loudness compensation and Pitch lock.
+Spring and the macros (Temperature, Size, Ultra).
 
 ## Try it
 
@@ -25,9 +26,8 @@ node tools/perf.js               # CPU per scenario
 ## Performance
 
 `node tools/perf.js` prints how much of one CPU core each scenario needs at 48 kHz. On a 2.1 GHz
-Xeon core: about 1.6% per voice, 12.5% for 8 voices trilling at high notes. The wing's
-integration is about a quarter of that; the full design (two nonlinear wings, a body, two
-limbs) is projected near 27% for 8 voices. Poly has 8 voices.
+Xeon core: 3–6% per voice, 26.7% for 8 voices trilling at high notes with two wings, the body
+and the second mode. Poly has 8 voices.
 
 ## Files
 
