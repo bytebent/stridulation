@@ -35,6 +35,7 @@
   const MAX_VOICES = 8;
   const MAX_TEETH = 400;
   const RING = 4096;            // force-pulse ring buffer (internal samples), power of two
+  const VIZ_N = 1024;           // live-view event ring
   const TWO_PI = 2 * Math.PI;
   // half-sine table for the muscle twitch, sin(π·x) for x in [0, 1] (linear interpolation, error under 2e-7)
   const TW_N = 2048, TWITCH = new Float64Array(TW_N + 2);
@@ -329,6 +330,10 @@
         pulse[(this.pw + k - i) & (RING - 1)] += a * (1 - Math.cos(TWO_PI * x));
       }
     }
+    vizEvent(kind) {
+      const z = this.voice.e.viz, w = z.w & (VIZ_N - 1), f = this.file;
+      z.tooth[w] = this.dir > 0 ? this.n : f.n - 1 - this.n; z.kind[w] = kind; z.limb[w] = this.idx; z.voice[w] = this.voice.index; z.w++;
+    }
     rec(i, frac, type) {
       const e = this.voice.e;
       if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type, pos: this.dir > 0 ? this.file.pos[this.n] : this.file.length - this.file.posR[this.n], v: this.v, limb: this.idx, dir: this.dir });
@@ -381,7 +386,7 @@
               skip = th > REL_PHASE && th < REL_PHASE + SKIP_WIDTH * ec;
             }
             if (skip) {
-              this.justSkipped = true; this.n = n; this.v = vel; this.rec(i, frac, 'skip'); n++;
+              this.justSkipped = true; this.n = n; this.v = vel; this.rec(i, frac, 'skip'); this.vizEvent(3); n++;
             } else {
               this.justSkipped = false; engaged = true; catchFrac = frac;
               this.writePulse(i, frac, level * IMPACT_K * ht[n] * vel / f0);
@@ -401,7 +406,7 @@
             const lp = loadPrev > 0 ? loadPrev : 0;
             const frac = Math.max(catchFrac, load > lp ? clamp((hold - lp) / (load - lp), 0, 1) : 1);
             this.writePulse(i, frac, level * RELEASE_K * load / f0);
-            this.n = n; this.v = vel; this.rec(i, frac, 'release');
+            this.n = n; this.v = vel; this.rec(i, frac, 'release'); this.vizEvent(open ? 1 : 2);
             // pitch keeper (lead limb, closing strokes): one release per sounding cycle; nudge the tuning toward the note
             if (this.idx === 0 && dir > 0) {
               const tRel = v.age2 + i - 1 + frac;
@@ -445,6 +450,7 @@
             const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1);
             this.writePulse(i, frac, IMPACT_K * ht[n] * vel / f0);
             e.catches++; this.n = n; this.v = vel;
+            this.vizEvent(4);
             if (vel < rF) { u = pos[n]; engaged = true; this.rec(i, frac, 'catch'); break; }   // slow enough: it lodges here
             this.rec(i, frac, 'strike');
             n++;
@@ -473,12 +479,12 @@
       const u = uPrev + vel * dt;
       let n = this.n;
       while (n < file.n && u >= pos[n] && uPrev < pos[n]) {
-        if (ht[n] > 0) { const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1); this.writePulse(i, frac, IMPACT_K * ht[n] * vel / f0); this.n = n; this.v = vel; this.dir = 1; this.rec(i, frac, 'strike'); e.catches++; }
+        if (ht[n] > 0) { const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1); this.writePulse(i, frac, IMPACT_K * ht[n] * vel / f0); this.n = n; this.v = vel; this.dir = 1; this.rec(i, frac, 'strike'); this.vizEvent(4); e.catches++; }
         n++;
       }
       while (n > 0 && u < pos[n - 1] && uPrev >= pos[n - 1]) {
         n--;
-        if (ht[n] > 0 && e.c.open > 0) { const frac = clamp((uPrev - pos[n]) / (uPrev - u), 0, 1); this.writePulse(i, frac, e.c.open * IMPACT_K * ht[n] * (-vel) / f0); this.v = vel; e.catches++; }
+        if (ht[n] > 0 && e.c.open > 0) { const frac = clamp((uPrev - pos[n]) / (uPrev - u), 0, 1); this.writePulse(i, frac, e.c.open * IMPACT_K * ht[n] * (-vel) / f0); this.v = vel; this.n = n; this.vizEvent(4); e.catches++; }
       }
       this.u = u; this.v = vel; this.n = n;
       const uReal = u;
@@ -492,7 +498,7 @@
     constructor(e, seed) {
       this.e = e;
       this.seed = (seed >>> 0) || 1;
-      this.limbs = [new Limb(this, 0), new Limb(this, 1)];
+      this.limbs = [new Limb(this, 0), new Limb(this, 1)]; this.index = 0;
       this.sec = { a1: 0, a2: 0, norm: 1 };
       this.reset();
     }
@@ -789,10 +795,15 @@
       this.fileKey = new Float64Array(FILE_PARAMS.length).fill(NaN); this.fileDirty = true;
       this.osTime = 0; this.ageCounter = 0; this.quietBlocks = 0;
       this.catches = 0; this.strokes = 0; this.rec = null;      // counters; set rec = [] to record events (tests)
+      // live view: a ring of recent tooth events (preallocated; the bench reads it): tooth index on the
+      // file, kind (1 released on the escapement's beat, 2 forced through, 3 slid over, 4 spring or scrape
+      // strike), limb and voice
+      this.viz = { w: 0, tooth: new Int16Array(VIZ_N), kind: new Uint8Array(VIZ_N), limb: new Uint8Array(VIZ_N), voice: new Uint8Array(VIZ_N) };
+      this.fileVersion = 0;
       this.bendNorm = 0; this.lastLoudGain = 0;
       const base = (this.p[PINDEX.seed] * 0x9e3779b9) >>> 0 || 1;
       this.voices = [];
-      for (let i = 0; i < MAX_VOICES; i++) this.voices.push(new Voice(this, (base + i * 0x6d2b79f5) >>> 0));
+      for (let i = 0; i < MAX_VOICES; i++) { const v = new Voice(this, (base + i * 0x6d2b79f5) >>> 0); v.index = i; this.voices.push(v); }
       this.updateControls();
       this.file = this.files[this.fileIdx];
       this.info = { voices: 0 };
@@ -949,7 +960,7 @@
           // they would with the lower carrier of Keytrack off
           const teeth = P[PINDEX.keytrack] >= 0.5 ? P[PINDEX.teeth] * Math.pow(P[PINDEX.size], 0.81) : P[PINDEX.teeth];
           spare.build(teeth, P[PINDEX.spacing], P[PINDEX.jitter], P[PINDEX.gaps], P[PINDEX.seed]);
-          this.fileIdx ^= 1; this.file = spare; this.fileDirty = false;
+          this.fileIdx ^= 1; this.file = spare; this.fileDirty = false; this.fileVersion++;
           for (let k = 0; k < FILE_PARAMS.length; k++) this.fileKey[k] = P[FILE_PARAMS[k]];
         }
       }

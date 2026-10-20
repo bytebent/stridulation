@@ -5,6 +5,39 @@ tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
 **Now: 79 engine tests passing** (about 45 s). Benchmark: `node tools/perf.js`.
 
+## Batch 07 · bench
+
+`tools/stridulation.html` (built by `node tools/bench/build.js`, about 137 KB, one file, works
+offline and from `file://`). Checked in headless Chromium: loads with no console errors, every
+test preset loads and plays, the computer keyboard plays notes.
+
+![The bench playing preset 01](docs/tests/07-bench.png)
+
+What it shows:
+
+- **File view**: every tooth of the newest voice's file, drawn to its height. A tooth lights as the
+  scraper strikes it: orange when it was released on the wing's beat, light grey when the muscle
+  forced it through, dark grey when the scraper slid over it (double speed), green for a spring
+  burst or a Scrape strike. The orange marker above is limb A, the green one below is limb B; the
+  dash shows which way it moves.
+- **Wing**: four cycles of the output, triggered on a rising zero crossing.
+- Readouts: teeth per second while stroking, heard as ticks (under about 30/s) or tone, the wing's
+  frequency, teeth per wing cycle (1 is a clockwork lock, 2 double speed), DSP load.
+- Escapement and Spring have notches (Cog rattle · Clockwork, Stiff · Spring): a drag settles into
+  one within 3% of travel; Shift-drag moves finely without notches; Page Up/Down jumps between them.
+- Frame is marked experimental. Knobs that do nothing in the current setting are dimmed.
+
+Sample readings (headless, 1.6 s into "Load and play"): preset 01 4.45k teeth/s at a 4.94 kHz
+wing, 0.9 teeth per cycle (the stroke ends count as stroking time, so a lock reads a little under
+1); preset 03 (Escapement 0.3) 5.1k teeth/s against a 4.55 kHz wing. DSP 3–10% of a core per
+voice in Chromium.
+
+The engine gained a small event ring for the view (tooth, kind, limb, voice per strike). Golden
+renders unchanged, 79 tests pass.
+
+**You:** first listening round. Open `tools/stridulation.html`, press Power on, play with A–;
+(Z/X octave). The presets are under "Bench only".
+
 ## Optimisation after batch 06
 
 Profiled the worst case (8 voices, two limbs, opening strokes, body, four LFOs). Changes, each

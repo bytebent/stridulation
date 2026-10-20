@@ -7,13 +7,14 @@ contact model runs from a **cog rattle**, where wing speed and tooth spacing set
 the wing sets the pitch. A softer scraper gives the stick-slip bursts of bark beetles and
 ultrasonic katydids.
 
-Status: **prototype, batch 06 of 10**. The reference engine has the file, the force-driven
+Status: **prototype, batch 07 of 10**. The reference engine has the file, the force-driven
 stroke, the plectrum with its escapement and its spring, two wings joined through the plectrum,
 glide, a second mode, the body, loudness compensation, Pitch lock, and the Temperature, Size and
 Ultra macros, the song engine (chirps, phrases, rubato, tempo sync), two limbs, Scrape mode,
 swell, glide and four LFOs. Field and tree crickets, a mole cricket, katydids (one of them
 Jurassic, one ultrasonic), bark beetles, a leafcutter ant and two grasshoppers are test presets.
-Next: the browser bench.
+The browser bench `tools/stridulation.html` plays it with the computer keyboard and shows the
+file live, each tooth lighting as it is struck. Next: the C++ port.
 
 ## Try it
 
@@ -23,7 +24,11 @@ Needs Node 18 or newer. No packages to install.
 node tests/engine-test.js        # engine tests
 node tools/render-presets.js     # test presets → renders/*.wav
 node tools/perf.js               # CPU per scenario
+node tools/bench/build.js        # rebuild the bench → tools/stridulation.html
 ```
+
+Or open `tools/stridulation.html` in a browser, press Power on and play A–; (Z/X octave, C/V
+velocity).
 
 ## Performance
 
@@ -47,6 +52,7 @@ The design doc is *stridulation: design and architecture*. `design.md` is this r
 - `reference/presets.js`: test presets (renders and tests only)
 - `tests/engine-test.js`: engine tests
 - `tools/render-presets.js`, `tools/perf.js`: preset renders, benchmark
+- `tools/bench/`: bench template, AudioWorklet wrapper, build script → `tools/stridulation.html`
 
 Later (see `plan.md`):
 
@@ -54,7 +60,6 @@ Later (see `plan.md`):
 - `source/PluginProcessor.*`, `source/PluginEditor.*`, `ui/index.html`: JUCE instrument and its
   web-view interface
 - `tests/`: C++ against reference comparison, plugin wrapper test
-- `tools/bench/`: bench (`stridulation.html`)
 
 ## License note
 
