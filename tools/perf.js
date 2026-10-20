@@ -15,6 +15,8 @@ const SCENARIOS = [
   ['1 voice, clockwork trill, 15 kHz', Object.assign({ escapement: 1 }, TRILL), [107]],
   ['1 voice, cog rattle trill, Speed 8, 15 kHz', Object.assign({ escapement: 0, speed: 8 }, TRILL), [107]],
   ['1 voice, slow scrape, long pulses', { escapement: 0, speed: 0.03, chirp: 0, rate: 0.5, toothtime: 1000 }, [88]],
+  ['1 voice, spring bursts, Speed 1, 15 kHz', { escapement: 0, spring: 0.8, speed: 1, chirp: 0, rate: 60, arc: 1, teeth: 400 }, [107]],
+  ['1 voice, Ultra ÷16 from 150 kHz', { keytrack: 1, tune: 48, ultra: 16, ultratime: 0, escapement: 1, chirp: 0, rate: 60, arc: 1 }, [103]],
   ['4 voices, clockwork trill', Object.assign({ escapement: 1, poly: 1 }, TRILL), chord8.slice(0, 4)],
   ['8 voices, defaults (chirps)', { poly: 1 }, chord8],
   ['8 voices, clockwork trill, high notes', Object.assign({ escapement: 1, poly: 1 }, TRILL), chord8.map(n => n + 24)],

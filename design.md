@@ -121,6 +121,10 @@ vibration:
 - **Spring:** *Dendroctonus valens* loads for 8–12.5 ms, then pulses one per tooth at about 695
   per second; simple chirps 13.6 ± 1.7 ms with 9.1 ± 1.1 pulses, interrupted chirps 54 ± 13.1 ms
   from several catch-and-release events (Lindeman & Yack 2019).
+- **Spring as built** (batch 05): a driver moves on slowly; the plectrum lodges on a tooth until
+  stretched, then slips over about 1 + 12.5 × Spring² teeth at Speed × carrier, slowing as it
+  goes, and lodges again. Phenomenological, fitted to *D. valens*; below Spring 0.02 the stiff
+  contact runs unchanged. Details in `tests.md`. [Proposed]
 - **Faults are features:** jumped teeth, noisy catches, held and resumed pulses, free ring-down
   when the escapement stops (Bennet-Clark & Bailey 2002). Speed and Jitter reach them.
 - **Tick:** the escapement's own sound, far quieter than the song, near twice the carrier when
@@ -234,10 +238,10 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | File | `gaps` | 0–0.5 | 0 | fraction of missing teeth |
 | File | `height` | 0–1 | 0.5 | how hard a tooth holds |
 | Contact | `escapement` | 0–1 | 0.9 | notches: Cog rattle 0, Clockwork 1 [Decided] |
-| Contact | `spring` | 0–1 | 0.1 | notches: Stiff 0, Spring 0.8 [Decided] |
+| Contact | `spring` | 0–1 | 0 | notches: Stiff 0, Spring 0.8 [Decided]; default Stiff (batch 05) |
 | Contact | `toothtime` | 10–1000 µs, log | 25 | force pulse width |
 | Contact | `tick` | 0–1 | 0.15 | raw contact to output |
-| Wing | `tune` | ±24 st | 0 | |
+| Wing | `tune` | ±48 st | 0 | wide enough for ultrasonic carriers before Ultra |
 | Wing | `ring` | 0.7–60, log | 25 | membrane Q |
 | Wing | `wings` | 0–30% | 8% | left–right free detune |
 | Wing | `glide` | −30…+30% | −10% | bend by file position |

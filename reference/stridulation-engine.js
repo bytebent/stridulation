@@ -58,6 +58,9 @@
   // saturates, k1·Nonlinear·NL_A·X³ / (1 + NL_B·X²), at most +NL_A/NL_B of k1. A locked clockwork
   // swings the frame to about |X| 1.8, where Nonlinear 1 adds about 75% stiffness.
   const NL_A = 0.25, NL_B = 0.083;
+  // spring: burst slows to SPRING_R of its start before it lodges; the hold is SPRING_S × the
+  // teeth per burst of driver stretch (sets the first catch: about 10 ms for D. valens)
+  const SPRING_R = 0.75, SPRING_S = 0.4;
   const KEEP_GAIN = 0.08, KEEP_RANGE = 0.7;   // pitch keeper: step per release and range (log of the tuning, ±1200 cents)
   const SECOND_IN = 0.076, BODY_IN = 2;   // Second at 0 dB and Body at 1 about as loud as the wing at 4.7 kHz (batch 04)
   const LOUD_PEAK = 0.6, LOUD_GUARD = 0.8;   // compensation keeps a voice's recent peak under 0.6, and any sample under 0.8
@@ -75,11 +78,11 @@
     { id: 'height', def: 0.5, min: 0, max: 1 },            // how hard a tooth holds
     // Contact
     { id: 'escapement', def: 0.9, min: 0, max: 1, notches: [0, 1] },     // Cog rattle ↔ Clockwork
-    { id: 'spring', def: 0.1, min: 0, max: 1, notches: [0, 0.8], built: false },
+    { id: 'spring', def: 0, min: 0, max: 1, notches: [0, 0.8] },
     { id: 'toothtime', def: 25, min: 10, max: 1000, log: true },        // µs, force pulse width
     { id: 'tick', def: 0.15, min: 0, max: 1 },
     // Wing
-    { id: 'tune', def: 0, min: -24, max: 24 },             // semitones
+    { id: 'tune', def: 0, min: -48, max: 48 },             // semitones
     { id: 'ring', def: 25, min: 0.7, max: 60, log: true }, // membrane Q
     { id: 'wings', def: 8, min: 0, max: 30 },          // % left–right free detune
     { id: 'glide', def: -10, min: -30, max: 30 },      // % bend by file position
@@ -108,10 +111,10 @@
     { id: 'sync', def: 0, min: 0, max: 1, step: 1, built: false },
     { id: 'rubato', def: 0.1, min: 0, max: 1, built: false },
     // World
-    { id: 'temperature', def: 25, min: 5, max: 40, built: false },
-    { id: 'size', def: 1, min: 0.25, max: 4, log: true, built: false },
-    { id: 'ultra', def: 1, min: 1, max: 16, log: true, built: false },
-    { id: 'ultratime', def: 0.5, min: 0, max: 1, built: false },
+    { id: 'temperature', def: 25, min: 5, max: 40 },
+    { id: 'size', def: 1, min: 0.25, max: 4, log: true },
+    { id: 'ultra', def: 1, min: 1, max: 16, log: true },
+    { id: 'ultratime', def: 0.5, min: 0, max: 1 },
     { id: 'keytrack', def: 1, min: 0, max: 1, step: 1 },
     // Voice
     { id: 'poly', def: 0, min: 0, max: 1, step: 1 },                 // Mono, Poly (8 voices)
@@ -127,7 +130,7 @@
   ];
   const PINDEX = {};
   PARAMS.forEach((d, i) => { PINDEX[d.id] = i; });
-  const FILE_PARAMS = ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'seed'].map(id => PINDEX[id]);
+  const FILE_PARAMS = ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'seed', 'size', 'keytrack'].map(id => PINDEX[id]);
 
   // knob position (0–1) ↔ value, as the UI's knobs move
   function toNorm(d, v) {
@@ -273,9 +276,9 @@
       const e = this.e, f = e.file;
       if (this.file) this.file.users--;
       this.file = f; f.users++;
-      const arc = e.c.arc, L = f.length;
+      const arc = clamp(e.c.arc * e.c.arcScale, Math.min(1, 2.5 / f.length), 1), L = f.length;
       this.uStart = L * (1 - arc) * 0.5; this.uEnd = L * (1 + arc) * 0.5;
-      this.u = this.uStart; this.v = 0;
+      this.u = this.uStart; this.v = 0; this.d = this.uStart; this.v0 = 0;
       let n = 0; while (n < f.n && f.pos[n] < this.uStart) n++;
       this.n = n; this.engaged = false; this.justSkipped = false; this.armed = true;
       this.stroking = true; this.strokePending = false; this.load = 0;
@@ -309,9 +312,9 @@
       const fr = FRAMES[c.frame], KF = fr.KF, K2 = fr.K2, GF = fr.GF;
       const g2 = membraneDamping(fr, c.ring), nl = c.nonlinear * NL_A;
       const dL = 1 + 0.5 * c.wings, dR = 1 - 0.5 * c.wings;
-      const glideAmt = c.glide, lock = c.pitchlock;
-      const Fm0 = c.speed * F0 * (0.7 + 0.3 * this.vel);
-      const strokePeriod = e.srOS / c.rate, chirpPeriod = e.srOS / c.chirprate, chirpN = c.chirp;
+      const glideAmt = c.glide, lock = c.pitchlock, springOn = c.springOn;
+      const Fm0 = c.speed * F0 * (0.7 + 0.3 * this.vel) * c.tempForce;
+      const strokePeriod = e.srOS / (c.rate * c.patternScale), chirpPeriod = e.srOS / (c.chirprate * c.patternScale), chirpN = c.chirp;
       const tickGain = c.tick * 0.25 * c.toothSec, outGain = OUT_GAIN / w0;
       // second mode per wing and the body: two-pole resonators, retuned per block
       const sOn = c.secondGain > 0, bOn = c.body > 0;
@@ -352,50 +355,92 @@
           glide = 1 + glideAmt * smooth01((u / file.length - 0.5) * 2);
           wf = w0 * glide * Math.exp(keep);
           const Fm = Fm0 * Math.exp(keep) * glide * (1 + c.curve * 0.5 * (Math.sin(Math.PI * clamp(phi, 0, 1)) - 1));   // twitch: full force at mid-file
-          const uPrev = u, loadPrev = this.load;
-          if (engaged) v = (v + a * (Fm - K * (u - pos[n]))) / (1 + a + a * dt * K);
-          else v = (v + a * Fm) / (1 + a);
-          u += v * dt;
-          const conf = env / (env + CONF_A0), ec = E * conf;
-          // phase of the file's swing, advanced by one sample: Y is from the end of the previous step
-          let th = Math.atan2(Yac, Yvm / wf) + wf * dt; if (th < 0) th += TWO_PI; if (th >= TWO_PI) th -= TWO_PI;
-          if (!engaged) {
-            while (n < file.n && ht[n] === 0 && pos[n] <= u) n++;      // missing teeth pass silently
-            if (n < file.n && u >= pos[n]) {
-              const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1);
-              const skip = !justSkipped && sinceRel < soon && ec > 0 && th > REL_PHASE && th < REL_PHASE + SKIP_WIDTH * ec;
-              if (skip) {
-                justSkipped = true; n++;
-                if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'skip', pos: pos[n - 1], v });
-              } else {
-                justSkipped = false; engaged = true; catchFrac = frac;
-                this.writePulse(i, frac, IMPACT_K * ht[n] * v / f0);
-                if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'catch', pos: pos[n], v });
-                e.catches++;
+          if (!springOn) {
+            const uPrev = u, loadPrev = this.load;
+            if (engaged) v = (v + a * (Fm - K * (u - pos[n]))) / (1 + a + a * dt * K);
+            else v = (v + a * Fm) / (1 + a);
+            u += v * dt;
+            const conf = env / (env + CONF_A0), ec = E * conf;
+            // phase of the file's swing, advanced by one sample: Y is from the end of the previous step
+            let th = Math.atan2(Yac, Yvm / wf) + wf * dt; if (th < 0) th += TWO_PI; if (th >= TWO_PI) th -= TWO_PI;
+            if (!engaged) {
+              while (n < file.n && ht[n] === 0 && pos[n] <= u) n++;      // missing teeth pass silently
+              if (n < file.n && u >= pos[n]) {
+                const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1);
+                const skip = !justSkipped && sinceRel < soon && ec > 0 && th > REL_PHASE && th < REL_PHASE + SKIP_WIDTH * ec;
+                if (skip) {
+                  justSkipped = true; n++;
+                  if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'skip', pos: pos[n - 1], v });
+                } else {
+                  justSkipped = false; engaged = true; catchFrac = frac;
+                  this.writePulse(i, frac, IMPACT_K * ht[n] * v / f0);
+                  if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'catch', pos: pos[n], v });
+                  e.catches++;
+                }
               }
             }
-          }
-          if (engaged) {
-            const load = K * (u - pos[n]);
-            const inWin = th > REL_PHASE - REL_EARLY && th < REL_PHASE + REL_LATE;
-            const hold = hs * ht[n] * (HOLD_MIN * Fm + ((ec > 0.05 && inWin && armed) ? 0 : HOLD_ESC * ec * F0));
-            if (load > hold) {
-              const lp = loadPrev > 0 ? loadPrev : 0;
-              const frac = Math.max(catchFrac, load > lp ? clamp((hold - lp) / (load - lp), 0, 1) : 1);
-              this.writePulse(i, frac, RELEASE_K * load / f0);
-              if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'release', pos: pos[n], v });
-              // pitch keeper: one release per sounding cycle; nudge the tuning toward the note
-              const tRel = this.age2 + i - 1 + frac;
-              if (lock && this.relLast >= 0 && ++this.relCount > 3) {
-                // the last release-to-release interval, in periods of the note (as glided)
-                const per = (tRel - this.relLast) * w0 * glide / (TWO_PI * e.srOS);
-                if (per > 0.5 && per < 2) keep = clamp(keep + KEEP_GAIN * Math.log(per), -KEEP_RANGE, KEEP_RANGE);
+            if (engaged) {
+              const load = K * (u - pos[n]);
+              const inWin = th > REL_PHASE - REL_EARLY && th < REL_PHASE + REL_LATE;
+              const hold = hs * ht[n] * (HOLD_MIN * Fm + ((ec > 0.05 && inWin && armed) ? 0 : HOLD_ESC * ec * F0));
+              if (load > hold) {
+                const lp = loadPrev > 0 ? loadPrev : 0;
+                const frac = Math.max(catchFrac, load > lp ? clamp((hold - lp) / (load - lp), 0, 1) : 1);
+                this.writePulse(i, frac, RELEASE_K * load / f0);
+                if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'release', pos: pos[n], v });
+                // pitch keeper: one release per sounding cycle; nudge the tuning toward the note
+                const tRel = this.age2 + i - 1 + frac;
+                if (lock && this.relLast >= 0 && ++this.relCount > 3) {
+                  // the last release-to-release interval, in periods of the note (as glided)
+                  const per = (tRel - this.relLast) * w0 * glide / (TWO_PI * e.srOS);
+                  if (per > 0.5 && per < 2) keep = clamp(keep + KEEP_GAIN * Math.log(per), -KEEP_RANGE, KEEP_RANGE);
+                }
+                this.relLast = tRel;
+                engaged = false; armed = false; n++; sinceRel = 0;
+                this.load = 0;
+              } else { this.load = load; fFile = load; }
+            } else this.load = 0;
+          } else {
+            // ---- spring (Lindeman & Yack 2019): the driver moves on at a slow speed; the plectrum
+            // lodges on a tooth until the stretch reaches its hold, then slips over several teeth at
+            // speed (starting at Fm, slowing as the spring unloads) and lodges again ----
+            const vd = c.springSlow * Fm, nb = c.springNb;
+            const dPrev = this.d; this.d += vd * dt;
+            if (engaged) {
+              const thr = SPRING_S * nb * hs * ht[n], st = this.d - u;
+              if (st >= thr) {
+                const frac = clamp((thr - (dPrev - u)) / (vd * dt), 0, 1);
+                this.writePulse(i, frac, RELEASE_K * Fm / f0);
+                if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'release', pos: pos[n], v: Fm });
+                engaged = false; n++; v = Fm; this.v0 = Fm; sinceRel = 0;
+                // burst decay rate so the plectrum covers about nb teeth before it slows to SPRING_R
+                const x = (SPRING_R * Fm - vd) / (Fm - vd);
+                this.bRate = x > 0 ? (vd * Math.log(1 / x) + (Fm - vd) * (1 - x)) / nb : (Fm - vd) / nb;
               }
-              this.relLast = tRel;
-              engaged = false; armed = false; n++; sinceRel = 0;
-              this.load = 0;
-            } else { this.load = load; fFile = load; }
-          } else this.load = 0;
+            }
+            if (!engaged) {
+              const uPrev = u;
+              if (v < vd) v = vd;                               // the plectrum moves with the driver at least
+              if (this.v0 === 0) { this.v0 = Fm; this.bRate = 0; }   // stroke start: it lodges on the first tooth
+              v = vd + (v - vd) * (1 - dt * this.bRate);
+              const rF = SPRING_R * this.v0;                    // lodges once slowed to SPRING_R of its start
+              u += v * dt;
+              while (n < file.n && u >= pos[n]) {
+                if (ht[n] === 0) { n++; continue; }
+                const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1);
+                this.writePulse(i, frac, IMPACT_K * ht[n] * v / f0);
+                e.catches++;
+                if (v < rF) {                                   // slow enough: it lodges here
+                  u = pos[n]; engaged = true;
+                  if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'catch', pos: pos[n], v });
+                  break;
+                }
+                if (e.rec) e.rec.push({ t: (e.osTime + i - 1 + frac) / e.srOS, type: 'strike', pos: pos[n], v });
+                n++;
+              }
+            }
+            this.load = 0;
+          }
           if (u >= this.uEnd || n >= file.n) {
             this.u = u; this.endStroke(); engaged = false; this.load = 0;
             if (this.strokePending && this.held) { this.startStroke(); u = this.u; v = 0; n = this.n; armed = true; justSkipped = false; }
@@ -545,8 +590,9 @@
     noteFreq(note) {
       const P = this.p;
       const st = P[PINDEX.tune] + 2 * this.bendNorm;
-      const base = P[PINDEX.keytrack] >= 0.5 ? 440 * Math.pow(2, (note - 69) / 12) : 4700;
-      return base * Math.pow(2, st / 12);
+      // Keytrack off: Size sets the carrier from the katydid file-length fit, f ∝ L^−0.81 (4.7 kHz at 1×)
+      const base = P[PINDEX.keytrack] >= 0.5 ? 440 * Math.pow(2, (note - 69) / 12) : 4700 * Math.pow(P[PINDEX.size], -0.81);
+      return base * Math.pow(2, st / 12) / P[PINDEX.ultra];    // the insect's carrier, divided by Ultra
     }
     noteOn(note, vel) {
       if (vel <= 0) { this.noteOff(note); return; }
@@ -572,8 +618,18 @@
       c.secondGain = P[PINDEX.secondlevel] <= -48 ? 0 : Math.pow(10, P[PINDEX.secondlevel] / 20);
       c.body = P[PINDEX.body]; c.spread = P[PINDEX.spread];
       if (!c.bodyLo) { c.bodyLo = { a1: 0, a2: 0, norm: 1 }; c.bodyHi = { a1: 0, a2: 0, norm: 1 }; }
-      setRes(c.bodyLo, P[PINDEX.bodytone], 3, this.srOS); setRes(c.bodyHi, 10 * P[PINDEX.bodytone], 2, this.srOS);
+      const ku = P[PINDEX.ultra];
+      setRes(c.bodyLo, P[PINDEX.bodytone] / ku, 3, this.srOS); setRes(c.bodyHi, 10 * P[PINDEX.bodytone] / ku, 2, this.srOS);
       c.pitchlock = P[PINDEX.pitchlock] >= 0.5; c.loudness = P[PINDEX.loudness];
+      // Spring: off below 0.02 (the stiff contact, unchanged); driver speed falls and bursts grow
+      const sp = P[PINDEX.spring];
+      c.springOn = sp > 0.02; c.springSlow = 0.02 + 0.98 * Math.pow(1 - sp, 0.45); c.springNb = 1 + 12.5 * sp * sp;
+      // Temperature: pattern rates follow Walker's rule (zero near 4 °C), muscle force (T + 17) / 42
+      const T = P[PINDEX.temperature];
+      c.tempForce = (T + 17) / 42;
+      // Ultra divides every frequency by k; Time keeps k^Time of the matching stretch
+      const k = P[PINDEX.ultra], tt = P[PINDEX.ultratime];
+      c.ultra = k; c.patternScale = Math.max(0.02, (T - 4) / 21) / Math.pow(k, tt); c.arcScale = Math.pow(k, tt - 1);
       c.speed = P[PINDEX.speed]; c.curve = P[PINDEX.curve]; c.arc = P[PINDEX.arc];
       c.rate = P[PINDEX.rate]; c.chirp = Math.round(P[PINDEX.chirp]); c.chirprate = P[PINDEX.chirprate];
       this.vol = Math.pow(10, P[PINDEX.volume] / 20);
@@ -584,7 +640,10 @@
       if (this.fileDirty) {
         const spare = this.files[this.fileIdx ^ 1];
         if (spare.users === 0) {
-          spare.build(P[PINDEX.teeth], P[PINDEX.spacing], P[PINDEX.jitter], P[PINDEX.gaps], P[PINDEX.seed]);
+          // Keytrack on: Size lengthens the file instead (more teeth at the same spacing), so pulses lengthen as
+          // they would with the lower carrier of Keytrack off
+          const teeth = P[PINDEX.keytrack] >= 0.5 ? P[PINDEX.teeth] * Math.pow(P[PINDEX.size], 0.81) : P[PINDEX.teeth];
+          spare.build(teeth, P[PINDEX.spacing], P[PINDEX.jitter], P[PINDEX.gaps], P[PINDEX.seed]);
           this.fileIdx ^= 1; this.file = spare; this.fileDirty = false;
           for (let k = 0; k < FILE_PARAMS.length; k++) this.fileKey[k] = P[FILE_PARAMS[k]];
         }

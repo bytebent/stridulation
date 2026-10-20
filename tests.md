@@ -3,7 +3,58 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
-**Now: 46 engine tests passing** (about 25 s). Benchmark: `node tools/perf.js`.
+**Now: 58 engine tests passing** (about 35 s). Benchmark: `node tools/perf.js`.
+
+## Batch 05 · spring and macros
+
+Built: the Spring contact, Temperature, Size, Ultra and Time. Tune now runs ±48 semitones, so
+ultrasonic carriers can be set before Ultra divides them. Spring defaults to Stiff (0), the
+stiff contact of batches 02–04, unchanged below 0.02.
+
+**Spring as built.** No paper gives equations for spring stridulation, so this is a
+phenomenological model fitted to Lindeman & Yack (2019):
+- a driver (the muscle or abdomen) moves on at a slow speed: Speed × carrier × slow(Spring),
+  with slow running from 1 at Spring 0 to 0.5 at 0.8 and 0.02 at 1;
+- the plectrum lodges on a tooth and stays there until the driver has stretched it by
+  0.4 × (teeth per burst) spacings (× Height and the tooth's own height);
+- released, it slips at Speed × carrier, slowing toward the driver. It strikes every tooth it
+  crosses and lodges on the first tooth it meets below 0.75 of its starting speed. The slowing is
+  set so a burst covers about 1 + 12.5 × Spring² teeth (9 at 0.8).
+
+At small Spring the driver is as fast as the slip, so the plectrum never lodges and Spring
+continues the stiff cog rattle. The escapement doesn't act on the spring contact, since katydids
+and beetles have none.
+
+![spring](docs/tests/05-spring.png)
+
+Tests:
+
+- 7 Bark beetle (*D. valens* settings): first catch loads 9.9 ms before sound (paper 8–12.5); a
+  simple chirp is 9 pulses at 657/s over 12.2 ms (paper 9.1 pulses, ~695/s, 13.6 ms); a longer
+  stroke catches 4 times (interrupted chirp). ✓
+- Spring 0.03 continues the stiff cog rattle: tooth rate 0.996 → 0.983 × carrier. ✓
+- 4 Escapement off: tooth rate from 15 to 32 °C ×1.530 (*Oecanthus*: 3.0 → 4.6 kHz, ×1.533). ✓
+- 4 Escapement on: carrier from 20 to 30 °C +2.0% (Koch et al.: 0.7% per °C, so under 7%). ✓
+- 4 Chirp rate follows (T − 4) / 21: 12 strokes at 15 °C, 21 at 25 °C in 2 s. ✓
+- Size 2, Keytrack off: 2712 Hz (fit: 2681 Hz). Keytrack on: same pitch, pulse 1.79× longer
+  (2^0.81 = 1.75). ✓
+- Ultra ÷10 from 47 kHz: 4737 Hz. Time 1: pulses 9.8× longer; Time 0: 0.90× (real length); Time
+  0.5: 2.9× (√10 = 3.2). ✓
+
+New presets 15–22: mole cricket, tree cricket at 15 and 32 °C, pure-tone katydid
+(*Tympanophora*), bark beetle simple and interrupted, ultrasonic katydid (*Arachnoscelis*, Ultra
+÷10, Time 1), Jurassic katydid (*Archaboilus*). Grasshoppers wait for two limbs (batch 06).
+
+Notes for the listening round:
+
+- **Tree cricket wing.** Sismondo measured Q 25–35, but at that Q an off-tune drive rings the
+  wing at its own pitch and fills the gaps between pulses. The presets use Ring 6, after Mhatre et
+  al.'s broad-plate wing. At 15 °C it's still harmonic-rich rather than a pure tone.
+- **Spring near 1** is steep: Arachnoscelis needs 0.999 to get its ~2 ms pulse period. A curve
+  that spends more of the knob near the top could help. [Open]
+- Cost: no change from batch 04 within the machine's noise (8 voices trilling high, 27–35%).
+
+**You:** listen to 15–22.
 
 ## Batch 04 · full radiator, loudness, pitch lock
 

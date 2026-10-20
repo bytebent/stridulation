@@ -34,6 +34,26 @@
     { name: '13 Clockwork pushed sharp, pitch lock', note: 60, p: Object.assign({}, FIELD, { escapement: 1, speed: 2.8, pitchlock: 1, chirp: 0, rate: 8 }) },
     // experimental: Frame Close with Nonlinear, driven off tune, doubles its period (a sub-octave)
     { name: '14 Frame Close, sub-octave (experimental)', note: 60, p: Object.assign({}, FIELD, { escapement: 0, speed: 0.8, frame: 1, nonlinear: 1, height: 1, ring: 30, spacing: 0, teeth: 300, chirp: 0, rate: 4, wings: 0, glide: 0 }) },
+    // batch 05: archetypes (grasshoppers wait for two limbs in batch 06)
+    // Gryllotalpa gryllotalpa: 1.7 kHz long trill, glide under 6% (Bennet-Clark & Bailey 2002)
+    { name: '15 Mole cricket', note: 60, p: { keytrack: 0, tune: st(1700), escapement: 1, teeth: 60, arc: 0.3, chirp: 0, rate: 40, glide: -5, wings: 4 } },
+    // Oecanthus nigricornis: no escapement, 43 teeth, carrier 3.0 kHz at 15 °C to 4.6 kHz at 32 °C,
+    // 25–65 pulses per second (Sismondo 1993). The tree-cricket wing is a broad plate (Mhatre et al.
+    // 2012), so the wing is set broad here (Ring 6) to follow the tooth rate, not Sismondo's Q 25–35
+    { name: '16 Tree cricket at 15 °C', note: 60, p: { keytrack: 0, tune: st(4000), escapement: 0, speed: 1.1, curve: 0.3, teeth: 43, spacing: 0, arc: 0.9, ring: 6, nonlinear: 0.6, chirp: 0, rate: 50, temperature: 15, glide: 0, wings: 3 } },
+    { name: '17 Tree cricket at 32 °C', note: 60, p: { keytrack: 0, tune: st(4000), escapement: 0, speed: 1.1, curve: 0.3, teeth: 43, spacing: 0, arc: 0.9, ring: 6, nonlinear: 0.6, chirp: 0, rate: 50, temperature: 32, glide: 0, wings: 3 } },
+    // Tympanophora similis: a bush cricket with a nearly pure 6.5 kHz song, glide 7.7% (Bennet-Clark & Bailey 2002)
+    { name: '18 Pure-tone katydid', note: 60, p: { keytrack: 0, tune: st(6500), escapement: 0.7, teeth: 90, arc: 0.6, chirp: 3, rate: 25, chirprate: 1.5, glide: -8, wings: 0, rubato: 0.3 } },
+    // Dendroctonus valens: spring stridulation, ~63 teeth, ~695 pulses/s, peaks near 7 and 30 kHz;
+    // simple chirps of ~9 pulses, interrupted chirps from several catches (Lindeman & Yack 2019)
+    { name: '19 Bark beetle, simple chirps', note: 60, p: { keytrack: 0, tune: st(7000), escapement: 0, spring: 0.8, speed: 0.12, curve: 0, teeth: 63, spacing: 0, jitter: 0.1, arc: 0.16, chirp: 0, rate: 3, ring: 2, body: 1, bodytone: 3000, glide: 0, wings: 0 } },
+    { name: '20 Bark beetle, interrupted chirps', note: 60, p: { keytrack: 0, tune: st(7000), escapement: 0, spring: 0.8, speed: 0.12, curve: 0, teeth: 63, spacing: 0, jitter: 0.1, arc: 0.5, chirp: 0, rate: 2, ring: 2, body: 1, bodytone: 3000, glide: 0, wings: 0 } },
+    // Arachnoscelis: 128 kHz, 62–64 teeth, elastic scraper slipping ~8 teeth at a time, trains of
+    // 5–13 short pulses ~2.2 ms apart (Montealegre-Z et al. 2006, via the brief); heard through Ultra ÷10,
+    // fully time-expanded (Time 1) like a bat detector
+    { name: '21 Ultrasonic katydid (Ultra ÷10)', note: 127, p: { keytrack: 1, tune: 12 * Math.log2(128000 / 12543.85), ultra: 10, ultratime: 1, escapement: 0, spring: 0.999, speed: 1, curve: 0, teeth: 64, spacing: 0, arc: 1, chirp: 0, rate: 30, ring: 20, glide: 0, wings: 0 } },
+    // Archaboilus musicus (Jurassic): symmetric wings, pure tone at 6.4 kHz, ~16 ms pulses (Gu et al. 2012, via the brief)
+    { name: '22 Jurassic katydid', note: 60, p: { keytrack: 0, tune: st(6400), escapement: 1, teeth: 107, arc: 0.95, chirp: 0, rate: 3, wings: 0, glide: -5 } },
   ];
   if (typeof module !== 'undefined' && module.exports) module.exports = { PRESETS };
   else root.STRIDULATION_PRESETS = PRESETS;

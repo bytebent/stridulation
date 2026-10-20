@@ -226,6 +226,65 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
   check('loudness: no clipping', peak < 0.9, 'peak ' + (20 * Math.log10(peak)).toFixed(1) + ' dBFS');
 }
 
+// ---- batch 05: spring and the macros ----
+// 7. Spring (Lindeman & Yack 2019, Dendroctonus valens): the plectrum catches and loads 8–12.5 ms
+// before sound starts; a simple chirp is 9.1 ± 1.1 pulses at about 695 per second, 13.6 ± 1.7 ms;
+// a longer stroke catches and releases several times (interrupted chirps)
+{
+  check('spring is Stiff by default', PARAMS.find(d => d.id === 'spring').def === 0);
+  const DV = { keytrack: 0, tune: 12 * Math.log2(7000 / 4700), escapement: 0, spring: 0.8, speed: 0.11, curve: 0, teeth: 63, spacing: 0, jitter: 0.1,
+    chirp: 0, rate: 2, ring: 2, body: 1, bodytone: 3000, glide: 0, wings: 0 };
+  const simple = render(Object.assign({}, DV, { arc: 0.16 }), 0.45).e.rec.filter(x => x.t < 0.45);
+  const first = simple.find(x => x.type === 'release'), hits = simple.filter(x => x.type === 'strike' && x.t < 0.4);
+  const load = (first.t - simple[0].t) * 1000;
+  check('7 spring: first catch loads 8–14 ms before sound', load > 8 && load < 14, load.toFixed(1) + ' ms (paper 8–12.5)');
+  const burst = hits.filter(x => x.t < first.t + 0.04);
+  const bDur = (burst[burst.length - 1].t - burst[0].t) * 1000, bRate = (burst.length - 1) / (bDur / 1000);
+  check('7 spring: simple chirp of 8–11 pulses at 550–800 per second', burst.length >= 8 && burst.length <= 11 && bRate > 550 && bRate < 800,
+    burst.length + ' pulses, ' + bRate.toFixed(0) + '/s over ' + bDur.toFixed(1) + ' ms (paper 9.1 pulses, ~695/s, 13.6 ms)');
+  const inter = render(Object.assign({}, DV, { arc: 0.5 }), 0.45).e.rec.filter(x => x.t < 0.4);
+  const catches = inter.filter(x => x.type === 'catch').length;
+  check('7 spring: a longer stroke catches and releases several times (interrupted chirp)', catches >= 3, catches + ' catches in one stroke');
+  // continuity: a little Spring is still a cog rattle at the same tooth rate
+  const tr = p => { const ev = render(Object.assign(ONE(4700), { escapement: 0, speed: 1, curve: 0 }, p), 0.3).e.rec.filter(x => x.type === 'catch' || x.type === 'strike');
+    const m = ev.slice(Math.floor(ev.length * 0.2), Math.floor(ev.length * 0.8)); return (m.length - 1) / (m[m.length - 1].t - m[0].t) / 4700; };
+  const r0 = tr({ spring: 0 }), r1 = tr({ spring: 0.03 });
+  check('spring 0.03 continues the stiff cog rattle (tooth rate within 3%)', Math.abs(r1 / r0 - 1) < 0.03, (r0).toFixed(3) + ' → ' + r1.toFixed(3) + ' × carrier');
+}
+
+// 4. Temperature: muscle force and pattern rates follow it; the escapement holds the pitch
+{
+  const f0 = 4700, tr = p => { const ev = render(Object.assign(ONE(f0), { curve: 0 }, p), 0.3).e.rec.filter(x => x.type === 'catch');
+    const m = ev.slice(Math.floor(ev.length * 0.2), Math.floor(ev.length * 0.8)); return (m.length - 1) / (m[m.length - 1].t - m[0].t) / f0; };
+  const cold = tr({ escapement: 0, speed: 1, temperature: 15 }), hot = tr({ escapement: 0, speed: 1, temperature: 32 });
+  check('4 escapement off: tooth rate 15 → 32 °C rises like Oecanthus (3.0 → 4.6 kHz, ×1.53)', Math.abs(hot / cold / 1.533 - 1) < 0.05, '×' + (hot / cold).toFixed(3));
+  const a = tr({ escapement: 1, speed: 2, temperature: 20 }), b = tr({ escapement: 1, speed: 2, temperature: 30 });
+  check('4 escapement on: carrier 20 → 30 °C changes under 7% (Koch et al.: 0.7%/°C)', Math.abs(b / a - 1) < 0.07, pct(b / a - 1));
+  const strokes = T => render({ keytrack: 0, chirp: 4, chirprate: 2.5, rate: 30, temperature: T }, 2.0, { record: false }).e.strokes;
+  const s15 = strokes(15), s25 = strokes(25);
+  check('4 chirp rate follows (T − 4) / 21', Math.abs(s15 / s25 - 11 / 21) < 0.12, s15 + ' strokes at 15 °C, ' + s25 + ' at 25 °C in 2 s');
+}
+
+// Size and Ultra
+{
+  const b = { escapement: 1, speed: 2, chirp: 0, rate: 1, jitter: 0, glide: 0, curve: 0, wings: 0, nonlinear: 0 };
+  const first = (p, note) => { const r = render(Object.assign({}, b, p), 1.2, { note }); const c = r.e.rec.filter(x => x.type === 'catch');
+    let last = c.findIndex((x, i) => i > 0 && x.t - c[i - 1].t > Math.max(0.004, 3 * (c[1].t - c[0].t))); if (last < 0) last = c.length;
+    const cs = c.slice(0, last), m = cs.slice(Math.floor(cs.length * 0.3), Math.floor(cs.length * 0.7));
+    return { rate: (m.length - 1) / (m[m.length - 1].t - m[0].t), dur: cs[cs.length - 1].t - cs[0].t, teeth: cs.length }; };
+  const s2 = first({ keytrack: 0, size: 2 }, 69);
+  check('size 2, Keytrack off: carrier from the katydid fit (4.7 kHz × 2^−0.81)', Math.abs(s2.rate / (4700 * Math.pow(2, -0.81)) - 1) < 0.02, s2.rate.toFixed(0) + ' Hz');
+  const k1 = first({ keytrack: 1, size: 1 }, 81), k2 = first({ keytrack: 1, size: 2 }, 81);
+  check('size 2, Keytrack on: same pitch, file 2^0.81 longer', Math.abs(k2.rate / k1.rate - 1) < 0.02 && Math.abs(k2.dur / k1.dur / Math.pow(2, 0.81) - 1) < 0.1,
+    'pulse ' + (k2.dur / k1.dur).toFixed(2) + '× longer');
+  const U = (k, t) => first({ keytrack: 0, tune: 12 * Math.log2(47000 / 4700), ultra: k, ultratime: t }, 69);
+  const real = { rate: 47000, dur: U(10, 1).teeth / 47000 };       // what the insect itself does (teeth / carrier)
+  const u1 = U(10, 1), u0 = U(10, 0), uh = U(10, 0.5);
+  check('ultra ÷10: carrier divided by 10', Math.abs(u1.rate / 4700 - 1) < 0.02, u1.rate.toFixed(0) + ' Hz from 47 kHz');
+  check('ultra Time 1: pulses 10× longer; Time 0: real length; Time 0.5: √10×', Math.abs(u1.dur / real.dur / 10 - 1) < 0.1 && Math.abs(u0.dur / real.dur - 1) < 0.15 && Math.abs(uh.dur / real.dur / Math.sqrt(10) - 1) < 0.15,
+    (u1.dur / real.dur).toFixed(2) + '×, ' + (u0.dur / real.dur).toFixed(2) + '×, ' + (uh.dur / real.dur).toFixed(2) + '×');
+}
+
 // 8. Same output at any buffer size; same seed, same output; another seed, another file
 {
   const p = Object.assign({}, PRESETS[6].p);       // damaged file: jitter and gaps use the seed
@@ -253,7 +312,7 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
   check('presets render, finite and not silent', bad.length === 0, bad.join(', '));
   bad = [];
   for (const id of ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'escapement', 'toothtime', 'ring', 'speed', 'curve', 'arc', 'rate', 'chirp', 'chirprate', 'tune',
-      'wings', 'glide', 'nonlinear', 'frame', 'second', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
+      'wings', 'glide', 'nonlinear', 'frame', 'second', 'spring', 'temperature', 'size', 'ultra', 'ultratime', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
     const d = PARAMS.find(q => q.id === id);
     for (const v of [d.min, d.max]) for (const note of [0, 127]) {
       const r = render({ [id]: v, keytrack: 1 }, 0.4, { record: false, note });
