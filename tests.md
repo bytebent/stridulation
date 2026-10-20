@@ -5,6 +5,37 @@ tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
 **Now: 79 engine tests passing** (about 45 s). Benchmark: `node tools/perf.js`.
 
+## Optimisation after batch 06
+
+Profiled the worst case (8 voices, two limbs, opening strokes, body, four LFOs). Changes, each
+checked against reference renders of all 25 presets:
+
+- No memory allocated per block any more: two object literals per voice and LFO parameter names
+  built as strings. The garbage collector was showing up in the profile, and the engine is meant
+  never to allocate in `process()`. Output identical.
+- `exp(keep)` worked out once per block, not twice per sample. Identical.
+- The escapement's phase angle (`atan2`) worked out only when a decision needs it: at a tooth
+  while a skip is possible, or while caught and armed. Identical.
+- Loop constants (body, second mode, gain) held in local variables; each output sample's peak
+  computed once. Identical.
+- Wing coefficients split into a per-block factor times the wing frequency. Identical.
+- The muscle twitch's `sin(π·φ)` read from a 2048-point table (error under 2e-7). Output differs
+  from the reference by −81 to −139 dB on 20 presets (3 identical). The slow scrape (−62 dB)
+  and Frame Close (−45 dB) are sensitive: a rounding difference moves a tooth event by a sample,
+  so the take differs, not the sound.
+
+Tried and dropped: updating the twitch, Shape and glide every 4 samples. It moved tooth timing
+(differences up to 0 dB against the reference) and saved nothing measurable.
+
+| Scenario | Before | After |
+|---|---|---|
+| 1 voice, defaults | 4.1% | 3.0% |
+| 8 voices, defaults | 23.0% | 16.7% |
+| 8 voices, clockwork trill, high notes | 30.6% | 24.2% |
+| Worst case | 48.1% | 37.1% |
+
+Best of two runs each, same machine; its noise is about ±4 points.
+
 ## Batch 06 · song, limbs, Scrape
 
 The voice is rebuilt around **limbs**: each limb has its own file contact, stroke and pulse

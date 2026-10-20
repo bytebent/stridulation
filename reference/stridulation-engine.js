@@ -36,6 +36,10 @@
   const MAX_TEETH = 400;
   const RING = 4096;            // force-pulse ring buffer (internal samples), power of two
   const TWO_PI = 2 * Math.PI;
+  // half-sine table for the muscle twitch, sin(π·x) for x in [0, 1] (linear interpolation, error under 2e-7)
+  const TW_N = 2048, TWITCH = new Float64Array(TW_N + 2);
+  for (let i = 0; i < TW_N + 2; i++) TWITCH[i] = Math.sin(Math.PI * Math.min(i, TW_N) / TW_N);
+  function sinPi(x) { const f = x * TW_N, j = f | 0; return TWITCH[j] + (TWITCH[j + 1] - TWITCH[j]) * (f - j); }
 
   // contact model constants (tuned in batch 02; see tests.md)
   const WING_TAU = 0.094;       // wing mass / damping, in carrier cycles: light, so it stalls on a tooth without overshoot
@@ -152,6 +156,8 @@
   const PINDEX = {};
   PARAMS.forEach((d, i) => { PINDEX[d.id] = i; });
   const TARGET_INDEX = MOD_TARGETS.map(id => PINDEX[id]);
+  const LFO_BASE = [], LFO_RETRIG = [];
+  for (let n = 1; n <= NUM_LFOS; n++) { LFO_BASE.push(PINDEX['lfo' + n + 'target']); LFO_RETRIG.push(PINDEX['lfo' + n + 'retrig']); }
   function nearestDiv(list, want) {
     let best = list[0], bd = Infinity;
     for (const b of list) { const dd = Math.abs(Math.log(b / want)); if (dd < bd) { bd = dd; best = b; } }
@@ -341,9 +347,9 @@
       this.tStroke++;
       // glide: the wing is tuned by where the plectrum is on the file (Bennet-Clark 2003); the lead limb sets it
       const uReal = dir > 0 ? u : file.length - u;
-      if (this.idx === 0 || !v.limbs[0].stroking) { v.glide = 1 + k.glideAmt * smooth01((uReal / file.length - 0.5) * 2); v.wf = k.w0 * v.glide * Math.exp(v.keep); }
+      if (this.idx === 0 || !v.limbs[0].stroking) { v.glide = 1 + k.glideAmt * smooth01((uReal / file.length - 0.5) * 2); v.wf = k.w0 * v.glide * v.ekeep; }
       // muscle force: speed, velocity, temperature, wheel and pressure, twitch, Shape, swell, arc growth, pattern
-      let Fm = k.Fm0 * Math.exp(v.keep) * v.glide * (1 + k.curve * 0.5 * (Math.sin(Math.PI * phi) - 1));
+      let Fm = k.Fm0 * v.ekeep * v.glide * (k.curve > 0 ? 1 + k.curve * 0.5 * (sinPi(phi) - 1) : 1);
       if (k.shape === 1) Fm *= 0.1 + 1.8 * Math.pow(Math.sin(3 * Math.PI * phi), 2);          // Steps: three jerks per stroke
       else if (k.shape === 2) Fm *= 1 + 0.85 * Math.sin(TWO_PI * 12 * phi);                   // Vibrate: a shiver along the stroke
       Fm *= (v.held ? v.swell : this.swellStart) * this.forceF;
@@ -359,16 +365,21 @@
       if (!springOn) {
         const a = k.a, K = k.K, uPrev = u, loadPrev = this.load;
         if (engaged) vel = (vel + a * (Fm - K * (u - pos[n]))) / (1 + a + a * dt * K);
-        else vel = (vel + a * Fm) / (1 + a);
+        else vel = (vel + a * Fm) * k.ia;
         u += vel * dt;
         const ec = E * this.env / (this.env + CONF_A0), wf = v.wf;
-        // phase of the file's swing, advanced by one sample: Y is from the end of the previous step
-        let th = Math.atan2(this.Yac, this.Yvm / wf) + wf * dt; if (th < 0) th += TWO_PI; if (th >= TWO_PI) th -= TWO_PI;
+        // phase of the file's swing, advanced by one sample (Y is from the end of the previous step);
+        // only worked out when a decision needs it
+        let th = -1;
         if (!engaged) {
           while (n < file.n && ht[n] === 0 && pos[n] <= u) n++;      // missing teeth pass silently
           if (n < file.n && u >= pos[n]) {
             const frac = clamp((pos[n] - uPrev) / (u - uPrev), 0, 1);
-            const skip = !this.justSkipped && this.sinceRel < k.soon && ec > 0 && th > REL_PHASE && th < REL_PHASE + SKIP_WIDTH * ec;
+            let skip = false;
+            if (!this.justSkipped && this.sinceRel < k.soon && ec > 0) {
+              th = Math.atan2(this.Yac, this.Yvm / wf) + wf * dt; if (th < 0) th += TWO_PI; if (th >= TWO_PI) th -= TWO_PI;
+              skip = th > REL_PHASE && th < REL_PHASE + SKIP_WIDTH * ec;
+            }
             if (skip) {
               this.justSkipped = true; this.n = n; this.v = vel; this.rec(i, frac, 'skip'); n++;
             } else {
@@ -380,8 +391,12 @@
         }
         if (engaged) {
           const load = K * (u - pos[n]);
-          const inWin = th > REL_PHASE - REL_EARLY && th < REL_PHASE + REL_LATE;
-          const hold = k.hs * ht[n] * (HOLD_MIN * Fm + ((ec > 0.05 && inWin && this.armed) ? 0 : HOLD_ESC * ec * F0));
+          let open = false;
+          if (ec > 0.05 && this.armed) {
+            if (th < 0) { th = Math.atan2(this.Yac, this.Yvm / wf) + wf * dt; if (th < 0) th += TWO_PI; if (th >= TWO_PI) th -= TWO_PI; }
+            open = th > REL_PHASE - REL_EARLY && th < REL_PHASE + REL_LATE;
+          }
+          const hold = k.hs * ht[n] * (HOLD_MIN * Fm + (open ? 0 : HOLD_ESC * ec * F0));
           if (load > hold) {
             const lp = loadPrev > 0 ? loadPrev : 0;
             const frac = Math.max(catchFrac, load > lp ? clamp((hold - lp) / (load - lp), 0, 1) : 1);
@@ -392,7 +407,7 @@
               const tRel = v.age2 + i - 1 + frac;
               if (k.lock && this.relLast >= 0 && ++this.relCount > 3) {
                 const per = (tRel - this.relLast) * k.w0 * v.glide / (TWO_PI * e.srOS);
-                if (per > 0.5 && per < 2) v.keep = clamp(v.keep + KEEP_GAIN * Math.log(per), -KEEP_RANGE, KEEP_RANGE);
+                if (per > 0.5 && per < 2) { v.keep = clamp(v.keep + KEEP_GAIN * Math.log(per), -KEEP_RANGE, KEEP_RANGE); v.ekeep = Math.exp(v.keep); }
               }
               this.relLast = tRel;
             }
@@ -497,7 +512,7 @@
       this.quiet = 0;
       this.glide = 1; this.wf = this.w0;     // wing tuning from the plectrum's place on the file
       // pitch keeper (log of the tuning correction) and loudness compensation (mean square, log gain)
-      this.keep = 0;
+      this.keep = 0; this.ekeep = 1;
       this.lgain = this.e.lastLoudGain; this.gainNow = 1; this.pkS = 0;
       this.ms = LOUD_TARGET * LOUD_TARGET * Math.exp(-2 * this.lgain);   // start from the last level heard: no jump
       this.age2 = 0; this.wheel0 = 0;
@@ -594,7 +609,7 @@
       if (this.held) this.swell = c.attack <= 0.0011 ? 1 : this.swell + (1 - this.swell) * (1 - Math.exp(-blockT / c.attack));
       else this.swell = c.release <= 0.0011 ? 0 : this.swell * Math.exp(-blockT / c.release);
       const k = this.k || (this.k = {});
-      k.dt = dt; k.f0 = f0; k.w0 = this.w0; k.a = dt * f0 / WING_TAU; k.K = this.K;
+      k.dt = dt; k.f0 = f0; k.w0 = this.w0; k.a = dt * f0 / WING_TAU; k.ia = 1 / (1 + k.a); k.K = this.K;
       k.E = c.escapement * (c.ring * c.ring / (c.ring * c.ring + REG_Q0 * REG_Q0)); k.hs = 2 * c.height;
       k.glideAmt = c.glide; k.lock = c.pitchlock; k.springOn = c.springOn; k.springSlow = c.springSlow; k.springNb = c.springNb;
       k.curve = c.curve; k.shape = c.shape; k.soon = SKIP_SOON * e.srOS / f0; k.swellNow = this.swell;
@@ -613,6 +628,9 @@
       const fr = FRAMES[c.frame], KF = fr.KF, K2 = fr.K2, GF = fr.GF;
       const g2 = membraneDamping(fr, c.ring), nl = c.nonlinear * NL_A;
       const dL = 1 + 0.5 * c.wings, dR = 1 - 0.5 * c.wings;
+      // wing coefficients per block, times wf (or wf²) per sample
+      const qK1l = KF * dL * dL, qKcl = KC * dL * dL, qK2l = K2 * dL * dL, qC1l = GF * dL, qC2l = g2 * dL;
+      const qK1r = KF * dR * dR, qKcr = KC * dR * dR, qK2r = K2 * dR * dR, qC1r = GF * dR, qC2r = g2 * dR;
       const tickGain = c.tick * 0.25 * c.toothSec, outGain = OUT_GAIN / this.w0;
       // second mode per wing and the body: two-pole resonators, retuned per block
       const sOn = c.secondGain > 0, bOn = c.body > 0;
@@ -624,6 +642,9 @@
       const bodyLo = c.bodyLo, bodyHi = c.bodyHi;
       const secIn = SECOND_IN * OUT_GAIN * Math.max(4, c.ring) / f0 * sec.norm, bodyIn = BODY_IN * OUT_GAIN / f0 * Math.pow(f0 / 4700, 0.6);   // body level about the same at any carrier
       const pA = lead.pulse, pB = lb.pulse;
+      const bLa1 = bodyLo.a1, bLa2 = bodyLo.a2, bLn = bodyLo.norm, bHa1 = bodyHi.a1, bHa2 = bodyHi.a2, bHn = bodyHi.norm, bodyAmt = c.body;
+      const sa1 = sec.a1, sa2 = sec.a2, secGain = c.secondGain;
+      let gainNow = this.gainNow;
       let peak = 0, sumsq = 0, nStroke = 0, peakStroke = 0;
       const guard = c.loudness > 0;
       for (let i = 0; i < nOS; i++) {
@@ -636,9 +657,9 @@
         const FL = gain * (fA + pfA), FR = two ? gain * (fB + pfB) : FL;
         const wf = this.wf;
         {
-          const wl = wf * dL, wr = wf * dR, wl2 = wl * wl, wr2 = wr * wr;
-          const k1l = KF * wl2, kcl = KC * wl2, k2l = K2 * wl2, c1l = GF * wl, c2l = g2 * wl, nll = nl * k1l;
-          const k1r = KF * wr2, kcr = KC * wr2, k2r = K2 * wr2, c1r = GF * wr, c2r = g2 * wr, nlr = nl * k1r;
+          const wf2 = wf * wf;
+          const k1l = qK1l * wf2, kcl = qKcl * wf2, k2l = qK2l * wf2, c1l = qC1l * wf, c2l = qC2l * wf, nll = nl * k1l;
+          const k1r = qK1r * wf2, kcr = qKcr * wf2, k2r = qK2r * wf2, c1r = qC1r * wf, c2r = qC2r * wf, nlr = nl * k1r;
           // the two membranes are joined through the plectrum and file: strongly while engaged
           const kw = ((lead.engaged || lb.engaged) ? WING_LINK_ENGAGED : WING_LINK_FREE) * wf * wf, ixs2 = fr.ixs2;
           for (let s = 0; s < sub; s++) {
@@ -693,33 +714,35 @@
         if (sOn) {
           // a resonator of unit peak gain fed like the wing: force × Q × OUT_GAIN / f0 matches the wing at resonance
           const xl = (FL / gain) * secIn, xr = (FR / gain) * secIn;
-          const nl1 = sec.a1 * s1L - sec.a2 * s2L + xl; s2L = s1L; s1L = nl1;
-          const nr1 = sec.a1 * s1R - sec.a2 * s2R + xr; s2R = s1R; s1R = nr1;
-          outL += c.secondGain * (s1L - s2L); outR += c.secondGain * (s1R - s2R);
+          const nl1 = sa1 * s1L - sa2 * s2L + xl; s2L = s1L; s1L = nl1;
+          const nr1 = sa1 * s1R - sa2 * s2R + xr; s2R = s1R; s1R = nr1;
+          outL += secGain * (s1L - s2L); outR += secGain * (s1R - s2R);
         }
         const pf = pfA + pfB;
         let mono = tickGain * pf;
         // body: low-Q ringing of the whole insect, struck by the teeth only (Masters et al. 1983)
         if (bOn) {
           const xin = pf * bodyIn;
-          const lo = bodyLo.a1 * b1 - bodyLo.a2 * b2 + xin * bodyLo.norm; b2 = b1; b1 = lo;
-          const hi = bodyHi.a1 * h1 - bodyHi.a2 * h2 + xin * bodyHi.norm; h2 = h1; h1 = hi;
-          mono += c.body * ((b1 - b2) + 0.7 * (h1 - h2));
+          const lo = bLa1 * b1 - bLa2 * b2 + xin * bLn; b2 = b1; b1 = lo;
+          const hi = bHa1 * h1 - bHa2 * h2 + xin * bHn; h2 = h1; h1 = hi;
+          mono += bodyAmt * ((b1 - b2) + 0.7 * (h1 - h2));
         }
         outL += mono; outR += mono;
         const oLs = panL * outL + panR * outR, oRs = panR * outL + panL * outR;
+        const aL = oLs < 0 ? -oLs : oLs, aR = oRs < 0 ? -oRs : oRs, am = aL > aR ? aL : aR;
         if (lead.stroking || lb.stroking || lead.follow) {
           sumsq += 0.5 * (oLs * oLs + oRs * oRs); nStroke++;
-          const am = Math.max(oLs < 0 ? -oLs : oLs, oRs < 0 ? -oRs : oRs); if (am > peakStroke) peakStroke = am;
+          if (am > peakStroke) peakStroke = am;
         }
         // compensation also guards peaks at once (a voice's first moments, before it has adapted)
-        if (guard) { const am = Math.max(oLs < 0 ? -oLs : oLs, oRs < 0 ? -oRs : oRs) * this.gainNow; if (am > LOUD_GUARD) this.gainNow *= LOUD_GUARD / am; }
-        oL[i] += oLs * this.gainNow; oR[i] += oRs * this.gainNow;
-        const ao = oLs < 0 ? -oLs : oLs; if (ao > peak) peak = ao;
+        if (guard && am * gainNow > LOUD_GUARD) gainNow *= LOUD_GUARD / (am * gainNow);
+        oL[i] += oLs * gainNow; oR[i] += oRs * gainNow;
+        if (aL > peak) peak = aL;
       }
-      this.age2 += nOS;
-      Object.assign(this, { XL, XvL, YL, YvL, XR, XvR, YR, YvR, s1L, s2L, s1R, s2R, b1, b2, h1, h2 });
-      if (!c.pitchlock) this.keep = 0;
+      this.age2 += nOS; this.gainNow = gainNow;
+      this.XL = XL; this.XvL = XvL; this.YL = YL; this.YvL = YvL; this.XR = XR; this.XvR = XvR; this.YR = YR; this.YvR = YvR;
+      this.s1L = s1L; this.s2L = s2L; this.s1R = s1R; this.s2R = s2R; this.b1 = b1; this.b2 = b2; this.h1 = h1; this.h2 = h2;
+      if (!c.pitchlock) { this.keep = 0; this.ekeep = 1; }
       // loudness compensation: mean square while stroking (time constant LOUD_TAU of stroking time),
       // gain toward LOUD_TARGET, ±LOUD_RANGE dB; velocity then sets the level explicitly
       if (nStroke > 0) {
@@ -799,7 +822,7 @@
     // move each active LFO on by dt seconds and compute its output (0–1)
     advanceLfos(dt) {
       for (let i = 0; i < NUM_LFOS; i++) {
-        const b = PINDEX['lfo' + (i + 1) + 'target'];
+        const b = LFO_BASE[i];
         const t = Math.round(this.p[b]);
         this.lfoTarget[i] = t;
         if (t === 0) continue;                                   // dormant
@@ -835,7 +858,7 @@
       for (let i = 0; i < NUM_LFOS; i++) {
         const t = this.lfoTarget[i];
         if (t === 0) continue;
-        const b = PINDEX['lfo' + (i + 1) + 'target'];
+        const b = LFO_BASE[i];
         const idx = TARGET_INDEX[t - 1], d = PARAMS[idx];
         const from = this.p[b + 4], to = this.p[b + 5];
         this.m[idx] = fromNorm(d, from + (to - from) * this.lfoSm[i]);
@@ -852,7 +875,7 @@
     noteOn(note, vel) {
       if (vel <= 0) { this.noteOff(note); return; }
       const v01 = clamp(vel / 127, 0, 1), f0 = this.noteFreq(note);
-      for (let i = 0; i < NUM_LFOS; i++) if (this.p[PINDEX['lfo' + (i + 1) + 'retrig']] >= 0.5) { this.lfoPhase[i] = 0; this.lfoFresh[i] = 1; }
+      for (let i = 0; i < NUM_LFOS; i++) if (this.p[LFO_RETRIG[i]] >= 0.5) { this.lfoPhase[i] = 0; this.lfoFresh[i] = 1; }
       if (this.p[PINDEX.poly] < 0.5) {
         // Mono: last note wins; a note played while another is held glides to it and the song goes on
         const v = this.voices[0], legato = this.stack.length > 0 && v.held && Math.round(this.m[PINDEX.play]) === 0;

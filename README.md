@@ -28,8 +28,8 @@ node tools/perf.js               # CPU per scenario
 ## Performance
 
 `node tools/perf.js` prints how much of one CPU core each scenario needs at 48 kHz. On a 2.1 GHz
-Xeon core: 4–7% per voice, about 32% for 8 voices trilling at high notes, 48% at the worst case
-(8 voices, two limbs, opening strokes, body, second mode, four LFOs). The machine's noise is
+Xeon core: 3–6% per voice, 17% for 8 voices at the defaults, 24% trilling at high notes, 37% at
+the worst case (8 voices, two limbs, opening strokes, body, second mode, four LFOs). The machine's noise is
 about ±4 points. Poly has 8 voices.
 
 ## Files
