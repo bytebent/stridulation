@@ -3,7 +3,7 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
-**Now: 44 engine tests passing** (about 25 s). Benchmark: `node tools/perf.js`.
+**Now: 46 engine tests passing** (about 25 s). Benchmark: `node tools/perf.js`.
 
 ## Batch 04 · full radiator, loudness, pitch lock
 
@@ -24,8 +24,11 @@ Findings while building:
 - **Test 5 (n:m locks) is not reproduced yet.** Driving a cog rattle at 3/4 or 4/5 of the wing,
   this frame (2.5 × carrier, Q 3) gives only tooth-rate harmonics. With the frame moved to
   1.25 × carrier, Q 8, stiffening does bring strong period doubling (peaks at 1.5× and 2.5× the
-  tooth rate), one of Sismondo's behaviours. But that frame broke double speed and the gap
-  behaviour, so it was reverted. Nonlinear stays a subtle stiffening for now. [Open]
+  tooth rate), one of Sismondo's behaviours. That frame breaks three of Koch's behaviours, even
+  with Nonlinear at 0: Speed 6 gives 1.34 teeth per cycle instead of 2, 34% sharp, a stroke 1.32×
+  faster instead of 2×; the wing crosses a gap at 0.67× its speed instead of faster; and free
+  decay reads Q 46 at Ring 40. Kept as it is, behind the experimental **Frame** switch (Normal,
+  Close), off by default. Two possible fixes are in `plan.md`. [Decided]
 - **Second mode and Body** are two-pole resonators normalised to unit peak gain and fed like the
   wing, so their level holds across pitch. The Body's input is scaled by (carrier / 4.7 kHz)^0.6,
   since the tooth impulses grow as the carrier falls.
@@ -49,6 +52,8 @@ Tests:
 - Pitch lock off by default. Clockwork at Speed 2.5: 44.6 → −1.7 cents; at 2.8: 80.3 → −3.0. Cog
   rattle at Speed 1.3: 331 → −18.5 cents (the rest is Curve's swell within the stroke). ✓
 - Loudness: six regimes spread 23.1 dB off, 5.7 dB on; peak −5.6 dBFS. ✓
+- Frame Normal by default. Frame Close with Nonlinear 1, cog rattle at 0.8 of the wing: half-rate
+  partials 6.7 dB below the tooth-rate ones (Normal: 40.1 dB below). ✓
 - Batch 02's contact tests run with Wings, Glide, Nonlinear and Second off, to test the contact
   alone; the defaults still lock (0.995 of the carrier at Speed 2).
 
@@ -56,9 +61,9 @@ Cost now (`tools/perf.js`): 1 voice 3–6%, 8 voices trilling at high notes 26.7
 batch 03 projection before the second limb.
 
 New presets: 11 leafcutter ant (body only), 12 field cricket with wide wings and glide, 13 a
-clockwork pushed sharp with Pitch lock on.
+clockwork pushed sharp with Pitch lock on, 14 Frame Close sub-octave (experimental).
 
-**You:** listen to 01–13; decide whether Nonlinear's period doubling is worth a different frame.
+**You:** listen to 01–14.
 
 ## Batch 03 · cost
 

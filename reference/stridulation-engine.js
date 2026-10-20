@@ -51,14 +51,13 @@
   const REG_Q0 = 5;             // membrane Q at which the wing is half able to act as a regulator
   const IMPACT_K = 0.5;         // catch pulse size (× impact speed / free speed at Speed 1, × one carrier period)
   const RELEASE_K = 0.15;       // release pulse size (× load / free force at Speed 1)
-  const FRAME_RATIO = 2.5, FRAME_Q = 3, COUPLING = 0.3;   // wing frame mode, its Q, frame–membrane coupling
+  const FRAME_RATIO = 2.5, COUPLING = 0.3;   // highest wing frame ratio (sets the RK4 step rule), frame–membrane coupling
   const OUT_GAIN = 0.17;
   const WING_LINK_ENGAGED = 0.6, WING_LINK_FREE = 0.02;   // membrane-to-membrane coupling (plectrum and file engaged, or not), × w²
   // frame stiffening (Sismondo 1993 used X⁵; he notes a cubic works as well): a cubic spring that
   // saturates, k1·Nonlinear·NL_A·X³ / (1 + NL_B·X²), at most +NL_A/NL_B of k1. A locked clockwork
   // swings the frame to about |X| 1.8, where Nonlinear 1 adds about 75% stiffness.
   const NL_A = 0.25, NL_B = 0.083;
-  const NL_XS = 1;              // frame amplitude the stiffening is scaled to (|X| / NL_XS)
   const KEEP_GAIN = 0.08, KEEP_RANGE = 0.7;   // pitch keeper: step per release and range (log of the tuning, ±1200 cents)
   const SECOND_IN = 0.076, BODY_IN = 2;   // Second at 0 dB and Body at 1 about as loud as the wing at 4.7 kHz (batch 04)
   const LOUD_PEAK = 0.6, LOUD_GUARD = 0.8;   // compensation keeps a voice's recent peak under 0.6, and any sample under 0.8
@@ -85,6 +84,7 @@
     { id: 'wings', def: 8, min: 0, max: 30 },          // % left–right free detune
     { id: 'glide', def: -10, min: -30, max: 30 },      // % bend by file position
     { id: 'nonlinear', def: 0.2, min: 0, max: 1 },
+    { id: 'frame', def: 0, min: 0, max: 1, step: 1, experimental: true },   // Normal, Close (sub-octave; see tests.md)
     { id: 'second', def: 2, min: 1, max: 4 },
     { id: 'secondlevel', def: -24, min: -48, max: 0 },
     { id: 'body', def: 0, min: 0, max: 1 },
@@ -198,12 +198,21 @@
   /* ---------- one voice ---------- */
   // Wing modes scale with the wing's angular frequency w: k1 = KF·w², kc = KC·w², k2 = K2·w²,
   // c1 = GF·w, c2 = g2·w (g2 depends on Ring). Two wings: left (+Wings/2) and right (−Wings/2).
-  const KF = FRAME_RATIO * FRAME_RATIO, KC = COUPLING, GF = FRAME_RATIO / FRAME_Q;
-  const K2 = KC * KC / (KF + KC - 1) + 1 - KC;          // puts the lower (membrane) mode at w
-  const MODE_R = KC / (KF + KC - 1);                    // frame/membrane amplitude in that mode
-  function membraneDamping(Q) {                         // so the coupled mode has Q = Ring
-    const rr = MODE_R * MODE_R;
-    return Math.max(1e-4, (1 + rr) / Q - GF * rr);
+  // Frame (experimental switch): Normal puts the frame at 2.5 × the carrier, Q 3. Close puts it at
+  // 1.25 ×, Q 8, with the stiffening scaled to |X| 0.3: Nonlinear then gives period doubling (a
+  // sub-octave), but double speed slips and gaps stall (tests.md, batch 04).
+  const KC = COUPLING;
+  const FRAMES = [[2.5, 3, 1], [1.25, 8, 0.3]].map(([ratio, q, xs]) => {
+    const KF = ratio * ratio, GF = ratio / q;
+    return {
+      KF, GF, ixs2: 1 / (xs * xs),
+      K2: KC * KC / (KF + KC - 1) + 1 - KC,             // puts the lower (membrane) mode at w
+      MODE_R: KC / (KF + KC - 1),                       // frame/membrane amplitude in that mode
+    };
+  });
+  function membraneDamping(fr, Q) {                     // so the coupled mode has Q = Ring
+    const rr = fr.MODE_R * fr.MODE_R;
+    return Math.max(1e-4, (1 + rr) / Q - fr.GF * rr);
   }
   const smooth01 = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
@@ -297,7 +306,8 @@
       const dt = 1 / e.srOS, a = dt * f0 / WING_TAU;
       const E = c.escapement * (c.ring * c.ring / (c.ring * c.ring + REG_Q0 * REG_Q0)), hs = 2 * c.height, K = this.K, w0 = this.w0;
       const gain = this.gain, sub = this.sub, h = dt / sub, envDec = this.envDec;
-      const g2 = membraneDamping(c.ring), nl = c.nonlinear * NL_A;
+      const fr = FRAMES[c.frame], KF = fr.KF, K2 = fr.K2, GF = fr.GF;
+      const g2 = membraneDamping(fr, c.ring), nl = c.nonlinear * NL_A;
       const dL = 1 + 0.5 * c.wings, dR = 1 - 0.5 * c.wings;
       const glideAmt = c.glide, lock = c.pitchlock;
       const Fm0 = c.speed * F0 * (0.7 + 0.3 * this.vel);
@@ -400,7 +410,7 @@
           const k1l = KF * wl2, kcl = KC * wl2, k2l = K2 * wl2, c1l = GF * wl, c2l = g2 * wl, nll = nl * k1l;
           const k1r = KF * wr2, kcr = KC * wr2, k2r = K2 * wr2, c1r = GF * wr, c2r = g2 * wr, nlr = nl * k1r;
           // the two membranes are joined through the plectrum and file: strongly while engaged
-          const kw = (engaged ? WING_LINK_ENGAGED : WING_LINK_FREE) * wf * wf, ixs2 = 1 / (NL_XS * NL_XS);
+          const kw = (engaged ? WING_LINK_ENGAGED : WING_LINK_FREE) * wf * wf, ixs2 = fr.ixs2;
           for (let s = 0; s < sub; s++) {
             let x2, p2;
             // stage 1
@@ -558,7 +568,7 @@
       c.pulseLen = Math.max(2.5, c.toothSec * this.srOS);    // internal samples
       c.tick = P[PINDEX.tick]; c.ring = P[PINDEX.ring];
       c.nonlinear = P[PINDEX.nonlinear]; c.wings = P[PINDEX.wings] / 100; c.glide = P[PINDEX.glide] / 100;
-      c.second = P[PINDEX.second];
+      c.second = P[PINDEX.second]; c.frame = P[PINDEX.frame] >= 0.5 ? 1 : 0;
       c.secondGain = P[PINDEX.secondlevel] <= -48 ? 0 : Math.pow(10, P[PINDEX.secondlevel] / 20);
       c.body = P[PINDEX.body]; c.spread = P[PINDEX.spread];
       if (!c.bodyLo) { c.bodyLo = { a1: 0, a2: 0, norm: 1 }; c.bodyHi = { a1: 0, a2: 0, norm: 1 }; }

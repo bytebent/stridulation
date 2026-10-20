@@ -32,6 +32,8 @@
     { name: '11 Leafcutter ant, body only', note: 60, p: { keytrack: 0, tune: st(590), escapement: 0, speed: 1, ring: 0.7, body: 1, bodytone: 1050, teeth: 30, arc: 1, spacing: 0, chirp: 0, rate: 5, wings: 0, glide: 0, secondlevel: -48, tick: 0.3 } },
     { name: '12 Field cricket, wide wings and glide', note: 60, p: Object.assign({}, FIELD, { escapement: 1, wings: 20, glide: -20, nonlinear: 0.6, spread: 1, secondlevel: -18 }) },
     { name: '13 Clockwork pushed sharp, pitch lock', note: 60, p: Object.assign({}, FIELD, { escapement: 1, speed: 2.8, pitchlock: 1, chirp: 0, rate: 8 }) },
+    // experimental: Frame Close with Nonlinear, driven off tune, doubles its period (a sub-octave)
+    { name: '14 Frame Close, sub-octave (experimental)', note: 60, p: Object.assign({}, FIELD, { escapement: 0, speed: 0.8, frame: 1, nonlinear: 1, height: 1, ring: 30, spacing: 0, teeth: 300, chirp: 0, rate: 4, wings: 0, glide: 0 }) },
   ];
   if (typeof module !== 'undefined' && module.exports) module.exports = { PRESETS };
   else root.STRIDULATION_PRESETS = PRESETS;

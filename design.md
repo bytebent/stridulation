@@ -153,6 +153,9 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 - **Stiffening:** a cubic spring that saturates, not X⁵ (Sismondo notes either works; X⁵ was
   unstable at the frame's real amplitude). The n:m locks of test 5 aren't reproduced yet with
   this frame. [Open]
+- **Frame** (experimental switch, Normal by default): Close moves the frame to 1.25 × the
+  carrier, so Nonlinear doubles the period (a sub-octave), at the cost of a slipping double speed
+  and stalls at gaps. Fixes to try later are in `plan.md`. [Decided]
 - **Glide** bends the wing frequency by plectrum position, not time: the anterior file end is more
   flexible, so the resonance driven there is lower, and drive amplitude rises from the posterior
   end to the middle then falls (Bennet-Clark 2003). Measured falls: 10% *G. campestris*, 10.6%
@@ -221,7 +224,7 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 
 ## 9. Parameters
 
-48 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
+49 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
 
 | Group | id | Range | Default | Notes |
 |---|---|---|---|---|
@@ -239,6 +242,7 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | Wing | `wings` | 0–30% | 8% | left–right free detune |
 | Wing | `glide` | −30…+30% | −10% | bend by file position |
 | Wing | `nonlinear` | 0–1 | 0.2 | frame stiffening |
+| Wing | `frame` | Normal, Close | Normal | experimental: Close gives a sub-octave, breaks double speed [Decided] |
 | Wing | `second` | 1–4× | 2.0 | second mode ratio |
 | Wing | `secondlevel` | −48…0 dB | −24 | |
 | Wing | `body` | 0–1 | 0 | low-Q body |

@@ -181,6 +181,21 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
   check('body: rings near Body tone and about 10× it (Masters et al. 1983)', g1 > 10 && g10 > 3, '+' + g1.toFixed(1) + ' dB at 1 kHz, +' + g10.toFixed(1) + ' dB at 10 kHz');
 }
 
+// Frame Close (experimental, off by default): with Nonlinear, an off-tune cog rattle doubles its
+// period — partials appear halfway between the tooth-rate harmonics (a sub-octave)
+{
+  check('frame is Normal by default', PARAMS.find(d => d.id === 'frame').def === 0);
+  const f0 = 4700, half = frame => {
+    const r = render(Object.assign(ONE(f0), { escapement: 0, speed: 0.8, chirp: 0, rate: 0.5, spacing: 0, teeth: 400, arc: 1, curve: 0, tick: 0, nonlinear: 1, ring: 30, height: 1, volume: -30, frame }), 0.3);
+    const c = r.e.rec.filter(x => x.type === 'catch'), t0 = c[30].t, t1 = c[c.length - 30].t, tsr = (c.length - 61) / (t1 - t0);
+    const L = r.L.subarray(Math.floor(t0 * SR), Math.floor(t1 * SR));
+    const band = f => { let re = 0, im = 0; const n = L.length; for (let i = 0; i < n; i++) { const w = 0.5 - 0.5 * Math.cos(TWO_PI * i / n); re += L[i] * w * Math.cos(TWO_PI * f * i / SR); im += L[i] * w * Math.sin(TWO_PI * f * i / SR); } return Math.sqrt(re * re + im * im); };
+    return 20 * Math.log10((band(1.5 * tsr) + band(2.5 * tsr)) / (band(tsr) + band(2 * tsr)));
+  };
+  const normal = half(0), close = half(1);
+  check('frame Close: period doubling, half-rate partials within 10 dB of the tooth-rate ones', close > -10 && normal < -20, 'Close ' + close.toFixed(1) + ' dB, Normal ' + normal.toFixed(1) + ' dB');
+}
+
 // Pitch lock (off by default) holds the note where the escapement pulls it sharp
 {
   const f0 = 4700;
@@ -238,7 +253,7 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
   check('presets render, finite and not silent', bad.length === 0, bad.join(', '));
   bad = [];
   for (const id of ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'escapement', 'toothtime', 'ring', 'speed', 'curve', 'arc', 'rate', 'chirp', 'chirprate', 'tune',
-      'wings', 'glide', 'nonlinear', 'second', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
+      'wings', 'glide', 'nonlinear', 'frame', 'second', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
     const d = PARAMS.find(q => q.id === id);
     for (const v of [d.min, d.max]) for (const note of [0, 127]) {
       const r = render({ [id]: v, keytrack: 1 }, 0.4, { record: false, note });
