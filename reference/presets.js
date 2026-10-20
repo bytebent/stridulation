@@ -54,6 +54,17 @@
     { name: '21 Ultrasonic katydid (Ultra ÷10)', note: 127, p: { keytrack: 1, tune: 12 * Math.log2(128000 / 12543.85), ultra: 10, ultratime: 1, escapement: 0, spring: 0.999, speed: 1, curve: 0, teeth: 64, spacing: 0, arc: 1, chirp: 0, rate: 30, ring: 20, glide: 0, wings: 0 } },
     // Archaboilus musicus (Jurassic): symmetric wings, pure tone at 6.4 kHz, ~16 ms pulses (Gu et al. 2012, via the brief)
     { name: '22 Jurassic katydid', note: 60, p: { keytrack: 0, tune: st(6400), escapement: 1, teeth: 107, arc: 0.95, chirp: 0, rate: 3, wings: 0, glide: -5 } },
+    // batch 06: grasshoppers, two legs (Elsner 1974). Pegs on each hind femur click against a wing
+    // vein: no tuned wing (Ring low), clicks around 8 kHz; both strokes sound (Open); the legs play
+    // different patterns, out of phase, and swap from time to time.
+    // Chorthippus biguttulus: impulse 0.9 ms, syllable 9.1 ms, chirp 72.5 ms, first-order sequence 2.9 s
+    { name: '23 Grasshopper (C. biguttulus)', note: 60, p: { keytrack: 0, tune: st(8000), escapement: 0, speed: 0.14, curve: 0.2, ring: 3, wings: 10, glide: 0, teeth: 120, spacing: 0, jitter: 0.15,
+      arc: 0.1, arcgrow: 0, open: 0.8, limbs: 1, lag: 0.25, legb: 0.4, swap: 0.2, chirp: 4, rate: 55, chirprate: 13.8, phrase: 2.9, pause: 1.2, rubato: 0.1, spread: 0.6 } },
+    // Omocestus viridulus: upstroke ~54 ms, downstroke ~18 ms; impulse rate low on the way up, 4 per ms on the way down
+    { name: '24 Grasshopper (O. viridulus)', note: 60, p: { keytrack: 0, tune: st(8000), escapement: 0, speed: 0.5, curve: 0.6, ring: 3, wings: 10, glide: 0, teeth: 120, spacing: 0, jitter: 0.15,
+      arc: 0.6, arcgrow: 0, open: 0.5, limbs: 1, lag: 0.08, legb: 0.5, swap: 0.15, chirp: 0, rate: 13, phrase: 45, pause: 12, rubato: 0.05, spread: 0.6 } },
+    // a leg that shivers along the stroke (Elsner's 'vibration' type), played as a scrape: one stroke per note
+    { name: '25 Vibrating leg, scrape', note: 60, p: { keytrack: 0, tune: st(7000), escapement: 0, speed: 0.3, shape: 2, ring: 4, teeth: 200, arc: 0.9, open: 0.4, play: 1, glide: 0, body: 0.3 } },
   ];
   if (typeof module !== 'undefined' && module.exports) module.exports = { PRESETS };
   else root.STRIDULATION_PRESETS = PRESETS;

@@ -189,7 +189,12 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
   end, 4 on the downstroke). **Limbs**, **Lag**, **Swap**, and Leg B offsets. [Proposed]
 - **Scrape** mode: each note is one stroke, so rhythms are played on the keyboard; with the mod
   wheel on wing position, the stroke follows the wheel like a guiro. In the first version.
-  [Decided]
+  [Decided] As built: the wheel takes over once it moves under a held note; dragging back strikes
+  at Open's level.
+- **As built in batch 06:** the voice is a set of limbs (one drives both wings, two drive one
+  each); the opening stroke is a cog rattle at Open's level and 0.4 of the force; Shape Steps is
+  three jerks per stroke, Vibrate twelve shivers; Leg B (0–1) cuts leg B's force by up to 35%
+  and adds a pause of up to 40% of the stroke. Details in `tests.md`. [Proposed]
 
 ## 7. Macros
 
@@ -228,7 +233,7 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 
 ## 9. Parameters
 
-49 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
+51 parameters, all [Proposed] unless noted. Hero control: **Escapement**.
 
 | Group | id | Range | Default | Notes |
 |---|---|---|---|---|
@@ -260,11 +265,13 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | Stroke | `limbs` | One, Two | One | |
 | Stroke | `lag` | 0–0.5 cycle | 0.1 | two limbs only |
 | Stroke | `swap` | 0–1 | 0.2 | chance per chirp |
+| Stroke | `legb` | 0–1 | 0.5 | Leg B's pattern: up to −35% force and a 40% pause (batch 06) |
 | Song | `play` | Song, Scrape | Song | Scrape [Decided] |
 | Song | `rate` | 0.5–150 Hz, log | 30 | strokes per second |
 | Song | `chirp` | 0–64 | 4 | 0 = trill |
 | Song | `chirprate` | 0.2–10 Hz, log | 2.5 | |
 | Song | `phrase` | 0–60 s | 0 | 0 = endless |
+| Song | `pause` | 0–60 s | 0 | silence between phrases (batch 06) |
 | Song | `sync` | Off, On | Off | |
 | Song | `rubato` | 0–1 | 0.1 | |
 | World | `temperature` | 5–40 °C | 25 | |
@@ -276,13 +283,13 @@ M2·Y'' + C2·Y' + Rcpl·(Y − X) + R2·Y = 0                    (membrane, rad
 | Voice | `pitchlock` | Off, On | Off | [Decided] |
 | Out | `loudness` | 0–1 | 1 | loudness compensation amount [Decided] |
 | Voice | `glidetime` | 0–2 s | 0 | Mono only |
-| Voice | `attack` | 1 ms–4 s | 5 ms | Swell, on force |
-| Voice | `release` | 1 ms–4 s | 50 ms | Swell, on force |
+| Voice | `attack` | 1 ms–4 s | 1 ms | Swell, on force; 1 ms acts at once (batch 06) |
+| Voice | `release` | 1 ms–4 s | 1 ms | Swell, on force; 1 ms stops the song at note-off |
 | Out | `spread` | 0–1 | 0.5 | |
 | Out | `volume` | −48…+6 dB | 0 | |
 | Out | `seed` | integer | 1 | |
 
-Not counted: four LFOs (Modulation page) and the Leg B offsets [Open].
+Not counted: four LFOs (Modulation page), seven settings each, as in Dolphin.
 
 ## 10. Archetypes (test presets)
 
@@ -324,5 +331,5 @@ Tests that tie it to the papers:
 
 ## 12. Open
 
-- Leg B. Temperature rules for katydids, grasshoppers and beetles.
+- Temperature rules for katydids, grasshoppers and beetles.
   Vendoring into krill.

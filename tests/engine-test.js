@@ -285,6 +285,129 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
     (u1.dur / real.dur).toFixed(2) + '×, ' + (u0.dur / real.dur).toFixed(2) + '×, ' + (uh.dur / real.dur).toFixed(2) + '×');
 }
 
+// ---- batch 06: song, limbs, Scrape, swell, glide, LFOs ----
+{
+  const strokesOf = (ev, gap) => { const out = []; let cur = []; for (const x of ev) { if (cur.length && x.t - cur[cur.length - 1].t > gap) { out.push(cur); cur = []; } cur.push(x); } if (cur.length) out.push(cur); return out; };
+  const catches = r => r.e.rec.filter(x => x.type === 'catch');
+  const K0 = { keytrack: 0, rubato: 0 };
+  // note-off finishes the stroke, and no new one starts
+  {
+    const r = render(Object.assign({}, K0, { chirp: 0, rate: 5 }), 0.4, { offAt: 0.01 });
+    const st = strokesOf(catches(r), 0.003);
+    check('note-off mid-stroke: the stroke finishes and no other starts', st.length === 1 && st[0].length >= 90, st.length + ' stroke(s), ' + (st[0] || []).length + ' teeth');
+  }
+  // timing is exact at any buffer size, with the song engine and two limbs running
+  {
+    const p = Object.assign({}, PRESETS.find(x => x.name.startsWith('23')).p, { seed: 3 });
+    const a = render(p, 1.5, { block: 1, record: false }).L, b = render(p, 1.5, { block: 77, record: false }).L, c = render(p, 1.5, { block: 1000, record: false }).L;
+    let d = 0; for (let i = 0; i < a.length; i++) d = Math.max(d, Math.abs(a[i] - b[i]), Math.abs(a[i] - c[i]));
+    check('song, rubato, two limbs: same output at buffer sizes 1, 77, 1000', d === 0, 'max diff ' + d);
+  }
+  // Arc growth: later strokes of a chirp use more of the file
+  {
+    const st = strokesOf(catches(render(Object.assign({}, K0, { chirp: 4, rate: 30, chirprate: 2.5, arcgrow: 1 }), 0.3)), 0.003).slice(0, 4).map(s => s.length);
+    check('arc growth: strokes of a chirp lengthen, the last uses the whole arc', st[0] < st[1] && st[1] < st[2] && st[2] < st[3] && st[0] < 0.5 * st[3], st.join(', ') + ' teeth');
+  }
+  // Rubato: strokes wander but stay near the rate, seeded
+  {
+    const onsets = rub => strokesOf(catches(render(Object.assign({}, K0, { chirp: 0, rate: 20, rubato: rub }), 1.0)), 0.003).map(s => s[0].t);
+    const iv = o => o.slice(1).map((t, i) => t - o[i]);
+    const a = iv(onsets(0)), b = iv(onsets(1));
+    const spread = x => Math.max(...x) / Math.min(...x);
+    check('rubato: stroke intervals vary at 1, are even at 0', spread(a) < 1.01 && spread(b) > 1.05 && spread(b) < 1.3, 'max/min interval ' + spread(a).toFixed(3) + ' → ' + spread(b).toFixed(3));
+  }
+  // Phrase and pause
+  {
+    const st = strokesOf(catches(render(Object.assign({}, K0, { chirp: 0, rate: 20, phrase: 0.5, pause: 0.5 }), 2.2)), 0.003).map(s => s[0].t);
+    const inPause = st.filter(t => (t % 1) > 0.52).length;
+    check('phrase 0.5 s, pause 0.5 s: strokes only inside phrases', inPause === 0 && st.length === 24, st.length + ' strokes, ' + inPause + ' in pauses');
+  }
+  // Sync: chirps on the beat grid
+  {
+    const e0 = new StridulationEngine(SR, 1); e0.rec = [];
+    for (const [k, v] of Object.entries({ keytrack: 0, sync: 1, chirp: 4, rate: 30, chirprate: 2.5, rubato: 0.5 })) e0.setParam(k, v);
+    e0.setTempo(120); e0.noteOn(69, 127);
+    const n = SR * 2, L = new Float32Array(n), R = new Float32Array(n); e0.process(L, R, n);
+    const starts = strokesOf(e0.rec.filter(x => x.type === 'catch'), 0.1).map(s => s[0].t), grid = e0.c.chirpBeats * 0.5;
+    const worst = Math.max(...starts.map(t => Math.abs(t / grid - Math.round(t / grid)) * grid));
+    check('sync at 120 bpm: chirps fall on the grid (2/3 beat) within 1 ms', worst < 0.001 && Math.abs(grid - 1 / 3) < 1e-9, starts.length + ' chirps, worst ' + (worst * 1000).toFixed(2) + ' ms off');
+  }
+  // Open: the opening stroke sounds first, at its level; silent and skipped at 0
+  {
+    const r0 = render(Object.assign({}, K0, { chirp: 0, rate: 5, escapement: 0, speed: 1, open: 0 }), 0.15);
+    const r1 = render(Object.assign({}, K0, { chirp: 0, rate: 5, escapement: 0, speed: 1, open: 0.5 }), 0.15);
+    const o0 = r0.e.rec.filter(x => x.dir < 0).length, o1 = r1.e.rec.filter(x => x.dir < 0), c1 = r1.e.rec.find(x => x.dir > 0);
+    check('open: an opening stroke runs before the closing one when Open > 0, none at 0', o0 === 0 && o1.length > 50 && o1[0].t < c1.t, o1.length + ' opening events, closing starts at ' + (c1.t * 1000).toFixed(1) + ' ms');
+  }
+  // Two limbs: B follows A by Lag × the stroke period; each drives its own wing
+  {
+    const r = render(Object.assign({}, K0, { chirp: 0, rate: 20, limbs: 1, lag: 0.25, legb: 0, escapement: 0, speed: 1, spread: 1 }), 0.2);
+    const A = r.e.rec.filter(x => x.limb === 0 && x.type === 'catch'), B = r.e.rec.filter(x => x.limb === 1 && x.type === 'catch');
+    check('two limbs: B starts Lag × stroke period after A', Math.abs((B[0].t - A[0].t) - 0.25 / 20) < 0.0005 && B.length === A.length, ((B[0].t - A[0].t) * 1000).toFixed(2) + ' ms (12.5)');
+    const r2 = render(Object.assign({}, K0, { chirp: 0, rate: 20, limbs: 1, lag: 0.25, legb: 1, escapement: 0, speed: 1, swap: 0 }), 0.2);
+    const sA = strokesOf(r2.e.rec.filter(x => x.limb === 0 && x.type === 'catch'), 0.003), sB = strokesOf(r2.e.rec.filter(x => x.limb === 1 && x.type === 'catch'), 0.003);
+    const dur = s => s[s.length - 1].t - s[0].t;
+    check('leg B at 1: a pause in its stroke makes it longer than A', dur(sB[0].concat(sB[1] || [])) > 1.3 * dur(sA[0]), (dur(sA[0]) * 1000).toFixed(1) + ' ms → B ' + ((r2.e.rec.filter(x => x.limb === 1 && x.type === 'catch').slice(-1)[0].t - sB[0][0].t) * 1000).toFixed(1) + ' ms incl. pause');
+    let swaps = 0; const r3 = render(Object.assign({}, K0, { chirp: 2, rate: 40, chirprate: 10, limbs: 1, legb: 1, swap: 0.5, escapement: 0, speed: 1 }), 2.0);
+    // with Leg B's force cut, the pattern-B limb's strokes take longer: count chirps where limb 0 is the slow one
+    const s0 = strokesOf(r3.e.rec.filter(x => x.limb === 0 && x.type === 'catch'), 0.004).map(dur), s1 = strokesOf(r3.e.rec.filter(x => x.limb === 1 && x.type === 'catch'), 0.004).map(dur);
+    for (let i = 0; i < Math.min(s0.length, s1.length); i++) if (s0[i] > s1[i] * 1.2) swaps++;
+    check('swap 0.5: the legs trade patterns now and then', swaps > 2 && swaps < Math.min(s0.length, s1.length) - 2, swaps + ' of ' + Math.min(s0.length, s1.length) + ' strokes with limb A on pattern B');
+  }
+  // Shape: Steps and Vibrate modulate the impulse rate within a stroke
+  {
+    const cv = shape => { const c = catches(render(Object.assign({}, K0, { chirp: 0, rate: 2, escapement: 0, speed: 1, shape, curve: 0 }), 0.12));
+      const iv = c.slice(1).map((x, i) => x.t - c[i].t), m = iv.reduce((a, b) => a + b) / iv.length; return Math.sqrt(iv.reduce((a, b) => a + (b - m) ** 2, 0) / iv.length) / m; };
+    const s0 = cv(0), s1 = cv(1), s2 = cv(2);
+    check('shape: Steps and Vibrate modulate the impulse rate, Smooth does not', s0 < 0.2 && s1 > 0.5 && s2 > 0.5, 'interval CV ' + s0.toFixed(2) + ', ' + s1.toFixed(2) + ', ' + s2.toFixed(2));
+  }
+  // Scrape: one stroke per note; the wheel moves the plectrum along the file, both ways
+  {
+    const r = render(Object.assign({}, K0, { play: 1, chirp: 4, rate: 30 }), 1.0);
+    check('scrape: one stroke per note, held or not', r.e.strokes === 1, r.e.strokes + ' stroke(s)');
+    const follow = open => { const e0 = new StridulationEngine(SR, 1); e0.rec = []; for (const [k, v] of Object.entries({ keytrack: 0, play: 1, arc: 0.8, teeth: 120, open, escapement: 0, rubato: 0 })) e0.setParam(k, v);
+      e0.noteOn(69, 127); const n = Math.round(SR * 1.3), L = new Float32Array(n), R = new Float32Array(n);
+      for (let i = 0; i < n; i += 128) { const t = i / SR; if (t > 0.2) e0.setModWheel(t < 0.7 ? (t - 0.2) / 0.5 : Math.max(0, 1 - (t - 0.7) / 0.5)); e0.process(L.subarray(i, i + 128), R.subarray(i, i + 128), Math.min(128, n - i)); }
+      let sq = 0; for (let i = Math.floor(SR * 0.75); i < SR * 1.2; i++) sq += L[i] * L[i];
+      return { fwd: e0.rec.filter(x => x.type === 'strike' && x.t > 0.2).length, back: Math.sqrt(sq / (SR * 0.45)) }; };
+    const f0 = follow(0), f1 = follow(0.7);
+    check('scrape: the wheel drags the plectrum over the arc (about 0.8 × 120 teeth)', Math.abs(f0.fwd - 96) <= 4, f0.fwd + ' strikes');
+    check('scrape: dragging back is silent at Open 0 and sounds with Open', f0.back < 1e-4 && f1.back > 1e-2, 'back rms ' + f0.back.toExponential(1) + ' → ' + f1.back.toExponential(1));
+  }
+  // Mono glide: legato notes glide with Glide time and the song goes on
+  {
+    const e0 = new StridulationEngine(SR, 1); for (const [k, v] of Object.entries({ keytrack: 1, glidetime: 0.1, chirp: 0, rate: 30 })) e0.setParam(k, v);
+    e0.noteOn(69, 127); const n = SR * 0.3, L = new Float32Array(n), R = new Float32Array(n);
+    e0.process(L.subarray(0, SR * 0.2), R.subarray(0, SR * 0.2), SR * 0.2); const strokesBefore = e0.strokes;
+    e0.noteOn(81, 127); e0.process(L.subarray(SR * 0.2), R.subarray(SR * 0.2), SR * 0.1);
+    const want = 440 * Math.pow(2, 1 - Math.exp(-1));
+    check('glide: after one Glide time, 63% of the way (log pitch)', Math.abs(e0.voices[0].f0 / want - 1) < 0.02, e0.voices[0].f0.toFixed(1) + ' Hz (' + want.toFixed(1) + ')');
+    check('glide: legato does not restart the song', e0.strokes > strokesBefore && e0.voices[0].stage === 1);
+  }
+  // LFO on Speed moves the tooth rate; a dormant LFO leaves every value as set
+  {
+    const e0 = new StridulationEngine(SR, 1); e0.setParam('speed', 1.3); e0.process(new Float32Array(64), new Float32Array(64), 64);
+    check('a dormant LFO changes nothing', e0.m.every((x, i) => x === e0.p[i]));
+    const tr = p => { const c = catches(render(Object.assign({}, K0, { chirp: 0, rate: 1, escapement: 0, curve: 0, spacing: 0 }, p), 0.1)).slice(5, 60); return (c.length - 1) / (c[c.length - 1].t - c[0].t) / 4700; };
+    const lo = tr({ speed: StridulationEngine.fromNorm(PARAMS.find(d => d.id === 'speed'), 0.62) }), mod = tr({ speed: 2, lfo1target: 'speed', lfo1shape: 2, lfo1rate: 0.02, lfo1from: 0.62, lfo1to: 0.62 });
+    check('an LFO holding Speed at From sets the tooth rate as the knob would', Math.abs(mod / lo - 1) < 0.02, lo.toFixed(3) + ' vs ' + mod.toFixed(3) + ' × carrier');
+  }
+  // controllers: the wheel speeds the stroke (Song), pressure pushes harder
+  {
+    const tr = at => { const e0 = new StridulationEngine(SR, 1); e0.rec = []; for (const [k, v] of Object.entries({ keytrack: 0, chirp: 0, rate: 1, escapement: 0, speed: 1, curve: 0, spacing: 0 })) e0.setParam(k, v); at(e0); e0.noteOn(69, 127);
+      const n = SR * 0.2, L = new Float32Array(n), R = new Float32Array(n); e0.process(L, R, n); const c = e0.rec.filter(x => x.type === 'catch').slice(5, 60); return (c.length - 1) / (c[c.length - 1].t - c[0].t); };
+    const base = tr(() => {}), wheel = tr(e => e.setModWheel(1)), press = tr(e => e.setPressure(1));
+    check('mod wheel at 1: tooth rate ×2.83 (cog rattle)', Math.abs(wheel / base / Math.pow(2, 1.5) - 1) < 0.05, '×' + (wheel / base).toFixed(2));
+    check('aftertouch at 1: tooth rate ×2 (cog rattle)', Math.abs(press / base / 2 - 1) < 0.05, '×' + (press / base).toFixed(2));
+  }
+  // Swell: a slow attack weakens the first strokes
+  {
+    const st = strokesOf(catches(render(Object.assign({}, K0, { chirp: 0, rate: 20, escapement: 0, speed: 1, attack: 0.3 }), 1.2)), 0.02);
+    const durs = st.map(s => s[s.length - 1].t - s[0].t);
+    check('attack 0.3 s: early strokes slower, later ones at full speed', durs[0] > 1.5 * durs[durs.length - 2], (durs[0] * 1000).toFixed(0) + ' ms first, ' + (durs[durs.length - 2] * 1000).toFixed(0) + ' ms late');
+  }
+}
+
 // 8. Same output at any buffer size; same seed, same output; another seed, another file
 {
   const p = Object.assign({}, PRESETS[6].p);       // damaged file: jitter and gaps use the seed
@@ -312,7 +435,8 @@ const rateOf = (s, a, b, f0) => { const n = s.length, m = s.slice(Math.floor(n *
   check('presets render, finite and not silent', bad.length === 0, bad.join(', '));
   bad = [];
   for (const id of ['teeth', 'spacing', 'jitter', 'gaps', 'height', 'escapement', 'toothtime', 'ring', 'speed', 'curve', 'arc', 'rate', 'chirp', 'chirprate', 'tune',
-      'wings', 'glide', 'nonlinear', 'frame', 'second', 'spring', 'temperature', 'size', 'ultra', 'ultratime', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
+      'wings', 'glide', 'nonlinear', 'frame', 'second', 'spring', 'temperature', 'size', 'ultra', 'ultratime',
+      'arcgrow', 'open', 'shape', 'limbs', 'lag', 'swap', 'legb', 'play', 'phrase', 'pause', 'sync', 'rubato', 'attack', 'release', 'glidetime', 'secondlevel', 'body', 'bodytone', 'spread', 'pitchlock', 'loudness']) {
     const d = PARAMS.find(q => q.id === id);
     for (const v of [d.min, d.max]) for (const note of [0, 127]) {
       const r = render({ [id]: v, keytrack: 1 }, 0.4, { record: false, note });

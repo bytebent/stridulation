@@ -3,7 +3,71 @@
 Quick results per batch: tests, experiments and pictures. Pictures live in `docs/tests/`. Run the
 tests with `node tests/engine-test.js`. Test numbers refer to `design.md` §11.
 
-**Now: 58 engine tests passing** (about 35 s). Benchmark: `node tools/perf.js`.
+**Now: 79 engine tests passing** (about 45 s). Benchmark: `node tools/perf.js`.
+
+## Batch 06 · song, limbs, Scrape
+
+The voice is rebuilt around **limbs**: each limb has its own file contact, stroke and pulse
+stream, and the contact maths is unchanged. One limb drives both wings. Two limbs
+(grasshoppers) drive one wing each, and each escapement reads its own wing.
+
+Built:
+- **Song engine:** chirps of strokes, trills, Phrase and Pause, Rubato (seeded; ±2.5% on chirps,
+  ±1% on strokes at 1), and Sync (strokes per beat and chirp lengths snap to note values, chirps
+  fall on the beat grid; Temperature is then ignored). `setTempo` and `setPosition` for the host.
+- **Arc growth:** in a chirp, the first stroke uses 40% of the arc at Arc growth 1, growing to
+  the whole arc by the last. Shorter strokes start further along the file and push 30% less
+  (Bennet-Clark & Bailey 2002).
+- **Open:** each stroke opens back along the file before it closes. The opening stroke is a cog
+  rattle at Open's level, pulled at 0.4 of the force (Elsner: upstrokes ~3× slower). Open 0
+  skips it entirely, so crickets keep their timing.
+- **Shape:** Smooth, Steps (three jerks per stroke) or Vibrate (twelve shivers per stroke), on
+  the muscle force.
+- **Two limbs:** Lag delays leg B by a share of the stroke period. Leg B's pattern is set by a
+  new knob, **Leg B** (0–1): up to 35% less force and a pause of up to 40% of the stroke early on,
+  after Elsner's pattern II. **Swap** is the chance per chirp that the legs trade patterns.
+- **Scrape:** each note is one stroke. If the mod wheel moves under a held note, the plectrum
+  follows the wheel along the arc; going back strikes at Open's level (silent at 0), like a guiro.
+- **Controllers:** mod wheel (Song) speeds the stroke up to ×2.83, aftertouch adds up to ×2 force.
+- **Swell:** attack and release on the muscle force. Both default to 1 ms, which acts at once:
+  full force from the first sample, and the song stops at note-off. A 5 ms attack (the design's
+  default) slowed the first stroke enough to break the lock tests. Longer settings fade the
+  insect in and out; after note-off the song goes on while the swell fades, each new stroke at
+  the swell of its start.
+- **Mono glide and legato:** a note played over a held one glides (Glide time, log pitch) and
+  the song goes on; releasing it glides back to the note still held.
+- **Four LFOs:** as in Dolphin. They can move every continuous knob except those that rebuild
+  the file. New knobs: **Leg B** and **Pause**.
+
+![two legs](docs/tests/06-two-legs.png)
+
+Tests:
+
+- Note-off mid-stroke: that stroke finishes (94 teeth), no other starts. ✓
+- With the song engine, rubato and two limbs: identical output at buffer sizes 1, 77, 1000. ✓
+- Arc growth 1: 34, 53, 73, 94 teeth through a chirp. ✓
+- Rubato: stroke interval max/min 1.000 at 0, 1.218 at 1. ✓
+- Phrase 0.5 s, pause 0.5 s: 24 strokes in 2.2 s, none in pauses. ✓
+- Sync at 120 bpm: chirps on the 2/3-beat grid within 0.02 ms, with rubato at 0.5. ✓
+- Open 0.5: an opening stroke (188 events) before the closing one; none at Open 0. ✓
+- Two limbs: leg B starts 12.50 ms after A (Lag 0.25 × 50 ms). Leg B at 1 takes several times
+  longer with its pause. Swap 0.5: the legs traded in 21 of 49 strokes. ✓
+- Shape: impulse interval CV 0.12 Smooth, 1.13 Steps, 0.91 Vibrate. ✓
+- Scrape: one stroke per note; the wheel drags the plectrum over 94 teeth (arc 0.8 × 120);
+  dragging back is silent at Open 0 and sounds at Open 0.7. ✓
+- Glide: 681.9 Hz after one Glide time from A4 to A5 (exactly 63% of the octave); legato doesn't
+  restart the song. ✓
+- A dormant LFO changes nothing; an LFO holding Speed sets the tooth rate exactly as the knob. ✓
+- Mod wheel at 1: tooth rate ×2.82; aftertouch at 1: ×2.00. ✓
+- Attack 0.3 s: first stroke 422 ms, later ones 23 ms. ✓
+
+Cost (`tools/perf.js`): 8 voices trilling at high notes 32%; worst case (8 voices, two limbs,
+opening strokes, body, second mode, four LFOs) 48%. Syrinx's worst case is 47% for 4 voices.
+
+New presets: 23 *C. biguttulus* and 24 *O. viridulus* (two legs, Open, after Elsner's timings),
+25 a vibrating leg played as a scrape.
+
+**You:** listen to 23–25, and to the earlier presets, which now have Arc growth and Rubato.
 
 ## Batch 05 · spring and macros
 

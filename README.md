@@ -7,12 +7,13 @@ contact model runs from a **cog rattle**, where wing speed and tooth spacing set
 the wing sets the pitch. A softer scraper gives the stick-slip bursts of bark beetles and
 ultrasonic katydids.
 
-Status: **prototype, batch 05 of 10**. The reference engine has the file, the force-driven
+Status: **prototype, batch 06 of 10**. The reference engine has the file, the force-driven
 stroke, the plectrum with its escapement and its spring, two wings joined through the plectrum,
 glide, a second mode, the body, loudness compensation, Pitch lock, and the Temperature, Size and
-Ultra macros. Field and tree crickets, a mole cricket, katydids (one of them Jurassic, one
-ultrasonic), bark beetles and a leafcutter ant are test presets. Next: the song engine, two limbs
-for grasshoppers, and Scrape mode.
+Ultra macros, the song engine (chirps, phrases, rubato, tempo sync), two limbs, Scrape mode,
+swell, glide and four LFOs. Field and tree crickets, a mole cricket, katydids (one of them
+Jurassic, one ultrasonic), bark beetles, a leafcutter ant and two grasshoppers are test presets.
+Next: the browser bench.
 
 ## Try it
 
@@ -27,8 +28,9 @@ node tools/perf.js               # CPU per scenario
 ## Performance
 
 `node tools/perf.js` prints how much of one CPU core each scenario needs at 48 kHz. On a 2.1 GHz
-Xeon core: 4–7% per voice, 27–35% for 8 voices trilling at high notes with two wings, the body
-and the second mode (the machine's noise is about ±4 points). Poly has 8 voices.
+Xeon core: 4–7% per voice, about 32% for 8 voices trilling at high notes, 48% at the worst case
+(8 voices, two limbs, opening strokes, body, second mode, four LFOs). The machine's noise is
+about ±4 points. Poly has 8 voices.
 
 ## Files
 

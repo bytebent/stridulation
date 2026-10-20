@@ -20,6 +20,8 @@ const SCENARIOS = [
   ['4 voices, clockwork trill', Object.assign({ escapement: 1, poly: 1 }, TRILL), chord8.slice(0, 4)],
   ['8 voices, defaults (chirps)', { poly: 1 }, chord8],
   ['8 voices, clockwork trill, high notes', Object.assign({ escapement: 1, poly: 1 }, TRILL), chord8.map(n => n + 24)],
+  ['Worst case: 8 voices, two limbs, open, body, 4 LFOs', Object.assign({ escapement: 1, poly: 1, limbs: 1, open: 0.6, body: 0.5, secondlevel: -12,
+    lfo1target: 'speed', lfo1rate: 3, lfo2target: 'ring', lfo2rate: 1, lfo3target: 'glide', lfo3rate: 5, lfo4target: 'spread', lfo4shape: 6, lfo4rate: 0.5 }, TRILL), chord8.map(n => n + 24)],
 ];
 
 function run(params, notes) {
